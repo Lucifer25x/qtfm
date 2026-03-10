@@ -1,0 +1,3 @@
+- Handle overflow of breadcrumbs
+- Add search button and implement dfs/bfs
+- Implement create/rename file/folder (context menu)
