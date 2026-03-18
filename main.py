@@ -6,12 +6,14 @@ from PySide6.QtWidgets import (
   QWidget, QHeaderView, QStyledItemDelegate, QMenu, QSizePolicy
 )
 from PySide6.QtCore import QDir, Qt, QSize
+from PySide6.QtGui import QPalette
 from core.path_logic import PathLinkedList
 import os
 
 class FileManager(QMainWindow):
   def __init__(self):
     super().__init__()
+    self.palette = QApplication.palette()
     self.setWindowTitle("QtFM")
     self.resize(1000, 600)
 
@@ -102,15 +104,12 @@ class FileManager(QMainWindow):
     left_layout.addWidget(nav_row)
     left_layout.addWidget(self.sidebar)
     left_widget.setLayout(left_layout)
-    # Constrain overall left column width so splitter cannot expand it unbounded
     left_widget.setMaximumWidth(400)
     left_widget.setMinimumWidth(160)
     left_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-    # Also allow sidebar to grow larger (user requested ~400 max)
     self.sidebar.setMaximumWidth(400)
     self.sidebar.setMinimumWidth(140)
 
-    # Right column: breadcrumbs on top, main view below
     right_widget = QWidget()
     right_layout = QVBoxLayout()
     right_layout.setContentsMargins(0, 5, 5, 0)
@@ -175,26 +174,6 @@ class FileManager(QMainWindow):
     is_dir = self.model.isDir(index)
 
     menu = QMenu()
-    menu.setStyleSheet("""
-      QMenu {
-        background-color: #141618;
-        border: 1px solid #555;
-        padding: 1px;
-      }
-      QMenu::item {
-        padding: 4px 12px;
-        background-color: transparent;  
-      }
-      QMenu::item:selected {
-        background-color: #6c53a6;
-        color: white;
-      }
-      QMenu::separator {
-        height: 1px;
-        background-color: #555;
-        margin: 4px 0;
-      }
-    """)
 
     if index.isValid():
       # Actions for files/folders
@@ -268,40 +247,33 @@ class FileManager(QMainWindow):
     self.breadcrumb_layout.setSpacing(4)
     self.breadcrumb_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
     self.breadcrumb_widget.setLayout(self.breadcrumb_layout)
-    self.breadcrumb_widget.setStyleSheet("""
-      QWidget {
-        background-color: #141618;
+    self.breadcrumb_widget.setStyleSheet(f"""
+      QWidget {{
+        background-color: {self.palette.color(QPalette.Base).name()};
         border-radius: 4px;
-      }
-      QToolButton {
-        color: #e0e0e0;
+      }}
+      QToolButton {{
+        color: {self.palette.color(QPalette.Text).name()};
         background-color: transparent;
         border: none;
         border-radius: 3px;
         padding: 2px 6px;
-        margin: 2px 0px;
-        font-weight: 500;
-      }
-      QToolButton:hover {
-        background-color: #32363a;
-      }
-      QToolButton:pressed {
-        background-color: #454a4f;
-      }
-      QLabel {
-        color: #666; /* The separator color */
-        font-size: 16px;
-      }
+      }}
+      QToolButton:hover {{
+        background-color: {self.palette.color(QPalette.AlternateBase).name()};
+      }}
+      QLabel {{
+        color: {self.palette.color(QPalette.Mid).name()};
+      }}
     """)
 
     # Page 2: Path Input
     self.path_edit = QLineEdit()
     self.path_edit.returnPressed.connect(self.on_path_edited)
+    self.path_edit.focusOutEvent = lambda e: self.path_stack.setCurrentIndex(0) # Exit edit mode on focus out
 
     self.path_stack.addWidget(self.breadcrumb_widget)
     self.path_stack.addWidget(self.path_edit)
-
-    # toolbar.addWidget(self.path_stack)
 
     # Double click on breadcrumb area to edit
     self.breadcrumb_widget.mouseDoubleClickEvent = lambda e: self.enter_path_edit_mode()
@@ -332,8 +304,14 @@ class FileManager(QMainWindow):
         sep = QLabel('\u203A') # Chevron symbol
         self.breadcrumb_layout.addWidget(sep)
       else:
-        # Style the current (last) directory
-        btn.setStyleSheet("font-weight: bold; color: #ffffff;")
+        # Highlight the last breadcrumb
+        btn.setStyleSheet(f"""
+          font-weight: bold;
+          color: {self.palette.color(QPalette.Text).name()};
+          background-color: {self.palette.color(QPalette.AlternateBase).name()};
+          border-radius: 3px;
+          padding: 2px 6px;
+        """)
 
       current = current.next
 
