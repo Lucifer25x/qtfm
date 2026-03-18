@@ -181,10 +181,16 @@ class FileManager(QMainWindow):
       open_action = menu.addAction("Open")
       open_action.triggered.connect(lambda: self.on_item_double_clicked(index))
 
+      if is_dir:
+        # Open in new window
+        new_window_action = menu.addAction("Open in New Window")
+        new_window_action.triggered.connect(lambda: self.open_in_new_window(target_path))
+
       # Move to trash action
       trash_action = menu.addAction("Move to Trash")
       trash_action.triggered.connect(lambda: self.move_to_trash(target_path))
 
+    # Creation actions
     new_file_action = menu.addAction("Create New File")
     new_folder_action = menu.addAction("Create New Folder")
 
@@ -202,6 +208,11 @@ class FileManager(QMainWindow):
       term_action.triggered.connect(lambda: subprocess.Popen(['konsole', '--workdir', target_path]))
 
     menu.exec(view.viewport().mapToGlobal(pos))
+
+  def open_in_new_window(self, path):
+    new_window = FileManager()
+    new_window.navigate_to(path, add_to_history=False)
+    new_window.show()
 
   def move_to_trash(self, path):
     reply = QMessageBox.question(self, "Confirm Move to Trash", f"Are you sure you want to move '{os.path.basename(path)}' to the trash?", QMessageBox.Yes | QMessageBox.No)
