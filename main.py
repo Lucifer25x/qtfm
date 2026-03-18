@@ -1,13 +1,14 @@
 import subprocess
 import sys
 from PySide6.QtWidgets import (
-  QApplication, QHBoxLayout, QVBoxLayout, QMainWindow, QSplitter, QListWidget, QListWidgetItem,
+  QApplication, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QMainWindow, QSplitter, QListWidget, QListWidgetItem,
   QStackedWidget, QFileSystemModel, QTreeView, QListView, QStyle, QLineEdit, QToolButton, QLabel,
   QWidget, QHeaderView, QStyledItemDelegate, QMenu, QSizePolicy
 )
 from PySide6.QtCore import QDir, Qt, QSize
 from PySide6.QtGui import QPalette
 from core.path_logic import PathLinkedList
+from send2trash import send2trash
 import os
 
 class FileManager(QMainWindow):
@@ -180,9 +181,15 @@ class FileManager(QMainWindow):
       open_action = menu.addAction("Open")
       open_action.triggered.connect(lambda: self.on_item_double_clicked(index))
 
-    # TODO: Create common actions like "Create New Folder", "Create New File", "Delete", "Rename" etc. and add them here
+      # Move to trash action
+      trash_action = menu.addAction("Move to Trash")
+      trash_action.triggered.connect(lambda: self.move_to_trash(target_path))
+
     new_file_action = menu.addAction("Create New File")
     new_folder_action = menu.addAction("Create New Folder")
+
+    new_file_action.triggered.connect(lambda: self.create_new_file(target_path))
+    new_folder_action.triggered.connect(lambda: self.create_new_folder(target_path))
 
     copy_path_action = menu.addAction("Copy Path")
     copy_path_action.triggered.connect(lambda: QApplication.clipboard().setText(target_path))
@@ -195,6 +202,32 @@ class FileManager(QMainWindow):
       term_action.triggered.connect(lambda: subprocess.Popen(['konsole', '--workdir', target_path]))
 
     menu.exec(view.viewport().mapToGlobal(pos))
+
+  def move_to_trash(self, path):
+    reply = QMessageBox.question(self, "Confirm Move to Trash", f"Are you sure you want to move '{os.path.basename(path)}' to the trash?", QMessageBox.Yes | QMessageBox.No)
+    if reply == QMessageBox.Yes:
+      send2trash(path)
+
+  def create_new_file(self, target_path):
+    # Ask user for file name
+    file_name, ok = QInputDialog.getText(self, "Create New File", "Enter file name:")
+    if ok and file_name:
+      new_file_path = os.path.join(target_path, file_name)
+      if not os.path.exists(new_file_path):
+        with open(new_file_path, 'w') as f:
+          pass
+      else:
+        QMessageBox.warning(self, "Error", "A file with that name already exists.")
+
+  def create_new_folder(self, target_path):
+    # Ask user for folder name
+    folder_name, ok = QInputDialog.getText(self, "Create New Folder", "Enter folder name:")
+    if ok and folder_name:
+      new_folder_path = os.path.join(target_path, folder_name)
+      if not os.path.exists(new_folder_path):
+        os.makedirs(new_folder_path)
+      else:
+        QMessageBox.warning(self, "Error", "A folder with that name already exists.")
 
   def setup_toolbar(self):
     # Create navigation buttons (we'll place them into the left column)

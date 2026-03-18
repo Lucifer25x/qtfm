@@ -1,3 +1,19 @@
 - Handle overflow of breadcrumbs
 - Add search button and implement dfs/bfs
-- Implement create/rename file/folder (context menu)
+- Trash
+- Hidden files/dir
+- Sort (a-z, z-a)
+  - name
+  - size
+  - date
+- Context menu:
+  - Create file/dir (maybe: sub-context)
+  - Rename
+  - Move to trash
+  - (Un)Compress using huffman
+  - Properties window
+  - Open in new window
+  - Maybe: copy/cut
+  - Maybe: add to places
+- Change icon size
+- Maybe: Chart stats

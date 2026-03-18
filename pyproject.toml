@@ -6,4 +6,5 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "pyside6>=6.10.2",
+    "send2trash>=2.1.0",
 ]
