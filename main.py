@@ -3,12 +3,13 @@ import sys
 from PySide6.QtWidgets import (
   QApplication, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QMainWindow, QSplitter, QListWidget, QListWidgetItem,
   QStackedWidget, QFileSystemModel, QTreeView, QListView, QStyle, QLineEdit, QToolButton, QLabel,
-  QWidget, QHeaderView, QStyledItemDelegate, QMenu, QSizePolicy
+  QWidget, QHeaderView, QMenu, QSizePolicy
 )
 from PySide6.QtCore import QDir, Qt, QSize
 from PySide6.QtGui import QPalette
 from core.path_logic import PathLinkedList
 from send2trash import send2trash
+from pathlib import Path
 import os
 
 class FileManager(QMainWindow):
@@ -23,19 +24,24 @@ class FileManager(QMainWindow):
     self.forward_stack = []
 
     # Model
+    # TODO: Handle show/hide hidden files
     self.model = QFileSystemModel()
+    self.model.setFilter(QDir.AllEntries | QDir.NoDotAndDotDot | QDir.Hidden | QDir.System)
     self.model.setRootPath(QDir.rootPath())
 
     # Sidebar items
+    self.trash_path = QDir.homePath() + "/.local/share/Trash/files"
     sidebar_items = [
-        ("Root", QDir.rootPath()),
         ("Home", QDir.homePath()),
         ("Desktop", QDir.homePath() + "/Desktop"),
         ("Documents", QDir.homePath() + "/Documents"),
         ("Downloads", QDir.homePath() + "/Downloads"),
         ("Music", QDir.homePath() + "/Music"),
         ("Pictures", QDir.homePath() + "/Pictures"),
-        ("Videos", QDir.homePath() + "/Videos")
+        ("Videos", QDir.homePath() + "/Videos"),
+        (None, None), # Separator
+        ("Root", QDir.rootPath()),
+        ("Trash", self.trash_path if os.path.exists(self.trash_path) else "")
     ]
 
     # Sidebar
@@ -50,7 +56,19 @@ class FileManager(QMainWindow):
       }
     """)
     for name, path in sidebar_items:
-        self.add_sidebar_item(name, path)
+        if not name and not path:
+          separator = QListWidgetItem()
+          separator.setFlags(Qt.NoItemFlags)
+          separator.setSizeHint(QSize(0, 10))
+          self.sidebar.addItem(separator)
+
+          # Horizontal line
+          line = QWidget()
+          line.setFixedHeight(1)
+          line.setStyleSheet(f"background-color: {self.palette.color(QPalette.Mid).name()};")
+          self.sidebar.setItemWidget(separator, line)
+        else:
+          self.add_sidebar_item(name, path)
     
     # Navigation logic
     self.sidebar.itemClicked.connect(self.navigate_from_sidebar)
@@ -79,10 +97,9 @@ class FileManager(QMainWindow):
     self.stack.addWidget(self.tree_view)
     self.stack.addWidget(self.grid_view)
     self.stack.setCurrentIndex(1)
-    # Build toolbar widgets (now not a QToolBar) and main layout
+
     self.setup_toolbar()
 
-    # Left column: navigation buttons on top, sidebar below
     left_widget = QWidget()
     left_layout = QVBoxLayout()
     left_layout.setContentsMargins(5, 5, 0, 0)
@@ -138,7 +155,7 @@ class FileManager(QMainWindow):
     # Build initial view and breadcrumbs on startup
     self.navigate_to(QDir.homePath(), add_to_history=False)
   
-    # Tree view: name column should stretch; other columns kept minimal
+    # Tree view
     self.tree_view.setIconSize(QSize(32, 32))
     self.tree_view.setUniformRowHeights(True)
     self.tree_view.setIndentation(20)
@@ -148,25 +165,10 @@ class FileManager(QMainWindow):
 
     # Column resizing
     header = self.tree_view.header()
-    header.setSectionResizeMode(0, QHeaderView.Stretch) # Stretch "Name" column
-    header.setSectionResizeMode(1, QHeaderView.ResizeToContents) # Size "Size" column to content
-    header.setSectionResizeMode(3, QHeaderView.ResizeToContents) # Size "Modified" column to content
+    header.setSectionResizeMode(0, QHeaderView.Stretch)
+    header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+    header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
     header.setStretchLastSection(False)
-
-    # Delegate: elide text normally, show full text when the item is selected
-    class ElideDelegate(QStyledItemDelegate):
-      def paint(self, painter, option, index):
-        opt = option
-        self.initStyleOption(opt, index)
-        if opt.state & QStyle.State_Selected:
-          opt.textElideMode = Qt.ElideNone
-        else:
-          opt.textElideMode = Qt.ElideRight
-        QStyledItemDelegate.paint(self, painter, opt, index)
-
-    delegate = ElideDelegate(self)
-    self.tree_view.setItemDelegate(delegate)
-    self.grid_view.setItemDelegate(delegate)
 
   def show_context_menu(self, pos):
     view = self.sender()
@@ -182,14 +184,23 @@ class FileManager(QMainWindow):
       open_action.triggered.connect(lambda: self.on_item_double_clicked(index))
 
       if is_dir:
-        # Open in new window
         new_window_action = menu.addAction("Open in New Window")
         new_window_action.triggered.connect(lambda: self.open_in_new_window(target_path))
 
       # Move to trash action
-      trash_action = menu.addAction("Move to Trash")
-      trash_action.triggered.connect(lambda: self.move_to_trash(target_path))
+      # TODO: Handle "Empty Trash" (consider sidebar right-click as well)
+      in_trash = Path(target_path).resolve().is_relative_to(Path(self.trash_path).resolve())
 
+      if not in_trash:
+        trash_action = menu.addAction("Move to Trash")
+        trash_action.triggered.connect(lambda: self.move_to_trash(target_path))
+      else:
+        restore_action = menu.addAction("Restore from Trash")
+        restore_action.triggered.connect(lambda: self.restore_from_trash(target_path))
+
+        delete_action = menu.addAction("Delete Permanently")
+        delete_action.triggered.connect(lambda: self.delete_permanently(target_path))
+      
     # Creation actions
     new_file_action = menu.addAction("Create New File")
     new_folder_action = menu.addAction("Create New Folder")
@@ -209,6 +220,30 @@ class FileManager(QMainWindow):
 
     menu.exec(view.viewport().mapToGlobal(pos))
 
+  def restore_from_trash(self, path):
+    original_path = os.path.join(QDir.homePath(), os.path.relpath(path, self.trash_path))
+    if os.path.exists(original_path):
+      QMessageBox.warning(self, "Restore Failed", f"A file with the name '{os.path.basename(original_path)}' already exists in the original location.")
+      return
+    try:
+      os.rename(path, original_path)
+      QMessageBox.information(self, "Restored", f"'{os.path.basename(path)}' has been restored to '{original_path}'.")
+    except Exception as e:
+      QMessageBox.critical(self, "Error", f"Failed to restore: {str(e)}")
+
+  def delete_permanently(self, path):
+    # TODO: Handle directories with contents (ask user if they want to delete all contents)
+    reply = QMessageBox.question(self, "Confirm Permanent Deletion", f"Are you sure you want to permanently delete '{os.path.basename(path)}'?", QMessageBox.Yes | QMessageBox.No)
+    if reply == QMessageBox.Yes:
+      try:
+        if os.path.isdir(path):
+          os.rmdir(path)
+        else:
+          os.remove(path)
+        QMessageBox.information(self, "Deleted", f"'{os.path.basename(path)}' has been permanently deleted.")
+      except Exception as e:
+        QMessageBox.critical(self, "Error", f"Failed to delete: {str(e)}")
+
   def open_in_new_window(self, path):
     new_window = FileManager()
     new_window.navigate_to(path, add_to_history=False)
@@ -220,7 +255,6 @@ class FileManager(QMainWindow):
       send2trash(path)
 
   def create_new_file(self, target_path):
-    # Ask user for file name
     file_name, ok = QInputDialog.getText(self, "Create New File", "Enter file name:")
     if ok and file_name:
       new_file_path = os.path.join(target_path, file_name)
@@ -231,7 +265,6 @@ class FileManager(QMainWindow):
         QMessageBox.warning(self, "Error", "A file with that name already exists.")
 
   def create_new_folder(self, target_path):
-    # Ask user for folder name
     folder_name, ok = QInputDialog.getText(self, "Create New Folder", "Enter folder name:")
     if ok and folder_name:
       new_folder_path = os.path.join(target_path, folder_name)
@@ -241,7 +274,7 @@ class FileManager(QMainWindow):
         QMessageBox.warning(self, "Error", "A folder with that name already exists.")
 
   def setup_toolbar(self):
-    # Create navigation buttons (we'll place them into the left column)
+    # Navigation buttons
     home_icon = self.style().standardIcon(QStyle.SP_DirHomeIcon)
     self.home_action = QToolButton()
     self.home_action.setIcon(home_icon)
@@ -267,18 +300,14 @@ class FileManager(QMainWindow):
     self.toggle_action.setText("Grid")
     self.toggle_action.clicked.connect(self.toggle_view)
 
-    # Style buttons: keep the new home button look, but make nav/toggle look like toolbar actions
-    try:
-      # Make back/forward/toggle flat like toolbar actions
-      self.back_action.setAutoRaise(True)
-      self.forward_action.setAutoRaise(True)
-      self.toggle_action.setAutoRaise(True)
+    # Make back/forward/toggle flat like toolbar actions
+    self.back_action.setAutoRaise(True)
+    self.forward_action.setAutoRaise(True)
+    self.toggle_action.setAutoRaise(True)
 
-      # Show only icons for back/forward (no text)
-      self.back_action.setToolButtonStyle(Qt.ToolButtonIconOnly)
-      self.forward_action.setToolButtonStyle(Qt.ToolButtonIconOnly)
-    except Exception:
-      pass
+    # Show only icons for back/forward
+    self.back_action.setToolButtonStyle(Qt.ToolButtonIconOnly)
+    self.forward_action.setToolButtonStyle(Qt.ToolButtonIconOnly)
 
     # Path container stack (breadcrumb / path edit)
     self.path_stack = QStackedWidget()
@@ -314,7 +343,7 @@ class FileManager(QMainWindow):
     # Page 2: Path Input
     self.path_edit = QLineEdit()
     self.path_edit.returnPressed.connect(self.on_path_edited)
-    self.path_edit.focusOutEvent = lambda e: self.path_stack.setCurrentIndex(0) # Exit edit mode on focus out
+    self.path_edit.focusOutEvent = lambda e: self.path_stack.setCurrentIndex(0)
 
     self.path_stack.addWidget(self.breadcrumb_widget)
     self.path_stack.addWidget(self.path_edit)
@@ -323,7 +352,6 @@ class FileManager(QMainWindow):
     self.breadcrumb_widget.mouseDoubleClickEvent = lambda e: self.enter_path_edit_mode()
 
   def update_nav_buttons(self):
-    # Update the enabled state
     self.back_action.setEnabled(len(self.back_stack) > 0)
     self.forward_action.setEnabled(len(self.forward_stack) > 0)
 
@@ -430,9 +458,18 @@ class FileManager(QMainWindow):
       self.navigate_to(self.model.filePath(index))
 
   def add_sidebar_item(self, name, path):
+    if not os.path.exists(path):
+      return
     item = QListWidgetItem(name)
+    if name.lower() == "home":
+      item.setIcon(self.style().standardIcon(QStyle.SP_DirHomeIcon))
+    elif name.lower() == "root":
+      item.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
+    elif name.lower() == "trash":
+      item.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
+    else:
+      item.setIcon(self.model.fileIcon(self.model.index(path)))
     item.setData(Qt.UserRole, path)
-    item.setIcon(self.model.fileIcon(self.model.index(path)))
     self.sidebar.addItem(item)
 
 if __name__ == "__main__":
