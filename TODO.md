@@ -16,4 +16,5 @@
   - Maybe: copy/cut
   - Maybe: add to places
 - Change icon size
+- Multiple selection (using shift and ctrl)
 - Maybe: Chart stats
