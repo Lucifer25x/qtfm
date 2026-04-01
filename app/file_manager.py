@@ -10,6 +10,7 @@ from .ui.sidebar import SidebarWidget
 from .ui.toolbar import ToolbarWidget
 from .ui.views import FileViews
 from .ui.context_menu import ContextMenuBuilder
+from pathlib import Path
 import os
 
 class FileManager(QMainWindow):
@@ -47,7 +48,7 @@ class FileManager(QMainWindow):
       ("Pictures",  QDir.homePath() + "/Pictures"),
       ("Videos",    QDir.homePath() + "/Videos"),
       (None, None),  # Separator
-      ("Root",  QDir.rootPath()),
+      ("File System",  QDir.rootPath()),
       ("Trash", self.trash_path if os.path.exists(self.trash_path) else ""),
     ]
 
@@ -62,6 +63,7 @@ class FileManager(QMainWindow):
     self.toolbar.home_btn.clicked.connect(lambda: self.navigate_to(QDir.homePath()))
     self.toolbar.back_btn.clicked.connect(self.navigate_back)
     self.toolbar.forward_btn.clicked.connect(self.navigate_forward)
+    self.toolbar.up_btn.clicked.connect(self.navigate_up)
     self.toolbar.toggle_btn.clicked.connect(self.toggle_view)
 
     # --- File views ---
@@ -83,6 +85,7 @@ class FileManager(QMainWindow):
     nav_layout.addWidget(self.toolbar.home_btn)
     nav_layout.addWidget(self.toolbar.back_btn)
     nav_layout.addWidget(self.toolbar.forward_btn)
+    nav_layout.addWidget(self.toolbar.up_btn)
     nav_layout.addWidget(self.toolbar.toggle_btn)
     nav_layout.addStretch()
     nav_row.setLayout(nav_layout)
@@ -134,10 +137,12 @@ class FileManager(QMainWindow):
         if clear_forward_stack:
           self.forward_stack.clear()
       self.file_views.set_root(index)
+      self.file_views.update_status(path)
       self.setWindowTitle(f"QtFM - {self.model.fileName(index)}")
       self.toolbar.update_nav_buttons(
         can_go_back=len(self.back_stack) > 0,
         can_go_forward=len(self.forward_stack) > 0,
+        can_go_up=str(Path(path).parent) != path,
       )
       self.toolbar.set_current_path(path)
       self.toolbar.update_breadcrumbs(path)
@@ -156,6 +161,12 @@ class FileManager(QMainWindow):
       current_path = self.model.filePath(self.file_views.tree_view.rootIndex())
       self.back_stack.append(current_path)
       self.navigate_to(next_path, add_to_history=False, clear_forward_stack=False)
+
+  def navigate_up(self):
+    current = self.model.filePath(self.file_views.tree_view.rootIndex())
+    parent  = str(Path(current).parent)
+    if parent != current:  # already at root when they're equal
+      self.navigate_to(parent)
 
   def navigate_from_sidebar(self, item):
     self.navigate_to(item.data(Qt.UserRole))

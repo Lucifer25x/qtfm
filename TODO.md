@@ -1,20 +1,15 @@
-- Handle overflow of breadcrumbs
+- Toolbar like thunar
 - Add search button and implement dfs/bfs
-- Trash
 - Hidden files/dir
+- Zoom in/out
 - Sort (a-z, z-a)
   - name
   - size
   - date
 - Context menu:
-  - Create file/dir (maybe: sub-context)
-  - Rename
-  - Move to trash
   - (Un)Compress using huffman
-  - Properties window
-  - Open in new window
+  - Properties window (general and permission)
   - Maybe: copy/cut
   - Maybe: add to places
-- Change icon size
 - Multiple selection (using shift and ctrl)
 - Maybe: Chart stats
