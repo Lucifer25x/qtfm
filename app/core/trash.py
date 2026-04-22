@@ -6,7 +6,6 @@ from urllib.parse import unquote
 import shutil
 import os
 
-
 class TrashManager:
   def __init__(self, parent_widget):
     self.parent     = parent_widget

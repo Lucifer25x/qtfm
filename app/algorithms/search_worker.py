@@ -1,7 +1,6 @@
 from PySide6.QtCore import QThread, Signal
 from .search import bfs, dfs
 
-
 class SearchWorker(QThread):
   result_found = Signal(str)
   finished     = Signal()

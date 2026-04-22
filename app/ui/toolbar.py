@@ -7,7 +7,6 @@ from PySide6.QtGui import QPalette
 from ..core.path_logic import PathLinkedList
 import os
 
-
 class ToolbarWidget(QWidget):
   navigate_requested = Signal(str)
 
@@ -138,7 +137,8 @@ class ToolbarWidget(QWidget):
         overflow_btn.setMenu(overflow_menu)
         overflow_btn.setPopupMode(QToolButton.InstantPopup)
         self.breadcrumb_layout.addWidget(overflow_btn)
-        self.breadcrumb_layout.addWidget(QLabel('›'))
+        # self.breadcrumb_layout.addWidget(QLabel('›'))
+        self.breadcrumb_layout.addWidget(self._make_separator())
 
       btn = QToolButton()
       btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -167,9 +167,14 @@ class ToolbarWidget(QWidget):
           padding: 2px 6px;
         """)
       else:
-        self.breadcrumb_layout.addWidget(QLabel('›'))
+        self.breadcrumb_layout.addWidget(self._make_separator())
 
     self.path_stack.setCurrentIndex(0)
+
+  def _make_separator(self):
+    sep = QLabel('›')
+    sep.setStyleSheet(f"color: {self.palette.color(QPalette.PlaceholderText).name()};")
+    return sep
 
   def update_nav_buttons(self, can_go_back, can_go_forward, can_go_up):
     self.back_btn.setEnabled(can_go_back)

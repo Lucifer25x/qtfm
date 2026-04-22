@@ -15,6 +15,10 @@ class SidebarWidget(QListWidget):
 		self.setStyleSheet("""
 			QListWidget {
 				outline: none;
+				border: none;
+			}
+			QListWidget:hover {
+				border: none;
 			}
 			QListWidget::item {
 				padding: 6px 8px;

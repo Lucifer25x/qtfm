@@ -22,8 +22,7 @@ class FileManager(QMainWindow):
     # History stacks
     self.back_stack = []
     self.forward_stack = []
-
-    # Keep references to extra windows so GC doesn't collect them
+    
     self._windows = []
 
     # Model
@@ -92,7 +91,7 @@ class FileManager(QMainWindow):
 
     left_widget = QWidget()
     left_layout = QVBoxLayout()
-    left_layout.setContentsMargins(5, 5, 0, 0)
+    left_layout.setContentsMargins(5, 5, 5, 0)
     left_layout.setSpacing(2)
     left_layout.addWidget(nav_row)
     left_layout.addWidget(self.sidebar)
@@ -104,7 +103,7 @@ class FileManager(QMainWindow):
     # Right panel: breadcrumb/path stack + file views
     right_widget = QWidget()
     right_layout = QVBoxLayout()
-    right_layout.setContentsMargins(0, 5, 5, 0)
+    right_layout.setContentsMargins(5, 5, 5, 0)
     right_layout.setSpacing(2)
     right_layout.addWidget(self.toolbar.path_stack)
     right_layout.addWidget(self.file_views, 1)
@@ -165,7 +164,7 @@ class FileManager(QMainWindow):
   def navigate_up(self):
     current = self.model.filePath(self.file_views.tree_view.rootIndex())
     parent  = str(Path(current).parent)
-    if parent != current:  # already at root when they're equal
+    if parent != current:  # root folder
       self.navigate_to(parent)
 
   def navigate_from_sidebar(self, item):
@@ -184,7 +183,6 @@ class FileManager(QMainWindow):
   # ---------------------------------------------------------------------------
   # Context menu
   # ---------------------------------------------------------------------------
-
   def show_context_menu(self, pos):
     self.context_menu.build(
       view=self.sender(),
@@ -198,6 +196,7 @@ class FileManager(QMainWindow):
         'empty_trash':     self.trash.empty_trash,
         'create_file':     self.file_ops.create_file,
         'create_folder':   self.file_ops.create_folder,
+        'rename':          self.file_ops.rename
       }
     )
 
