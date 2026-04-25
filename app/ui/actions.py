@@ -1,5 +1,7 @@
-from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QApplication, QStyle, QActionGroup
+# from PySide6.QtGui import QAction, QKeySequence
+# from PySide6.QtWidgets import QApplication, QStyle, QActionGroup
+from PySide6.QtGui import QAction, QKeySequence, QActionGroup
+from PySide6.QtWidgets import QApplication, QStyle
 
 class ActionRegistry:
   def __init__(self, parent):
@@ -26,12 +28,22 @@ class ActionRegistry:
     self.go_forward = self._action("Forward",        QStyle.SP_ArrowForward,  "Alt+Right")
 
     # --- View ---
-    self.view_grid  = self._action("Grid View",      QStyle.SP_FileDialogContentsView)
-    self.view_tree  = self._action("Tree View",      QStyle.SP_FileDialogDetailedView)
-    self.zoom_in    = self._action("Zoom In",        QStyle.SP_ArrowUp,       "Ctrl++")
+    # self.view_grid = self._action("Grid View", QStyle.SP_FileDialogContentsView, checkable=True)
+    # self.view_tree = self._action("Tree View", QStyle.SP_FileDialogDetailedView, checkable=True)
+    self.view_grid = self._action("Grid View", checkable=True)
+    self.view_tree = self._action("Tree View", checkable=True)
+    self.view_grid.setChecked(True)  # default
+
+    self.view_group = QActionGroup(self.parent)
+    self.view_group.setExclusive(True)
+    self.view_group.addAction(self.view_grid)
+    self.view_group.addAction(self.view_tree)
+
+    self.zoom_in    = self._action("Zoom In",        QStyle.SP_ArrowUp,       "Ctrl+=")
     self.zoom_out   = self._action("Zoom Out",       QStyle.SP_ArrowDown,     "Ctrl+-")
     self.zoom_reset = self._action("Normal Size",    None,                    "Ctrl+0")
     self.show_hidden = self._action("Show Hidden Files", None, "Ctrl+H", checkable=True)
+    self.show_hidden.setChecked(True)
 
     # --- Sort ---
     self.sort_group = QActionGroup(self.parent)
@@ -60,6 +72,9 @@ class ActionRegistry:
     self.cut           = self._action("Cut",              None, "Ctrl+X")
     self.copy          = self._action("Copy",             None, "Ctrl+C")
     self.paste         = self._action("Paste",            None, "Ctrl+V")
+    self.cut.setEnabled(False)    # until implemented
+    self.copy.setEnabled(False)   # until implemented
+    self.paste.setEnabled(False)  # until implemented
     self.rename        = self._action("Rename",           None, "F2")
     self.move_to_trash = self._action("Move to Trash",    QStyle.SP_TrashIcon, "Delete")
     self.restore       = self._action("Restore from Trash")
@@ -68,7 +83,7 @@ class ActionRegistry:
     self.create_file   = self._action("Create New File",  QStyle.SP_FileIcon)
     self.create_folder = self._action("Create New Folder",QStyle.SP_DirIcon)
     self.copy_path     = self._action("Copy Path")
-    # self.properties    = self._action("Properties",       None, "Alt+Return")
+    self.properties    = self._action("Properties",       None, "Alt+Return")
 
     # --- Terminal ---
     self.open_terminal = self._action("Open Terminal Here", QStyle.SP_ComputerIcon)

@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
   QHBoxLayout, QVBoxLayout, QMainWindow, QSplitter,
-  QSizePolicy, QWidget
+  QSizePolicy, QWidget, QApplication
 )
 from PySide6.QtCore import QDir, Qt
 from .core.model import FileModel
@@ -10,8 +10,11 @@ from .ui.sidebar import SidebarWidget
 from .ui.toolbar import ToolbarWidget
 from .ui.views import FileViews
 from .ui.context_menu import ContextMenuBuilder
+from .ui.actions import ActionRegistry
+from .ui.menubar import AppMenuBar
 from pathlib import Path
 import os
+
 
 class FileManager(QMainWindow):
   def __init__(self):
@@ -33,6 +36,11 @@ class FileManager(QMainWindow):
     # Trash
     self.trash = TrashManager(self)
     self.trash_path = self.trash.trash_path
+
+    # Actions
+    self.actions = ActionRegistry(self)
+    self._connect_actions()
+    self.setMenuBar(AppMenuBar(self.actions, self))
 
     # File operations
     self.file_ops = FileOps(self)
@@ -59,10 +67,10 @@ class FileManager(QMainWindow):
     # --- Toolbar ---
     self.toolbar = ToolbarWidget()
     self.toolbar.navigate_requested.connect(self.navigate_to)
-    self.toolbar.home_btn.clicked.connect(lambda: self.navigate_to(QDir.homePath()))
-    self.toolbar.back_btn.clicked.connect(self.navigate_back)
-    self.toolbar.forward_btn.clicked.connect(self.navigate_forward)
-    self.toolbar.up_btn.clicked.connect(self.navigate_up)
+    self.toolbar.home_btn.setDefaultAction(self.actions.go_home)
+    self.toolbar.back_btn.setDefaultAction(self.actions.go_back)
+    self.toolbar.forward_btn.setDefaultAction(self.actions.go_forward)
+    self.toolbar.up_btn.setDefaultAction(self.actions.go_up)
     self.toolbar.toggle_btn.clicked.connect(self.toggle_view)
 
     # --- File views ---
@@ -70,8 +78,20 @@ class FileManager(QMainWindow):
     self.file_views.connect_double_click(self.on_item_double_clicked)
     self.file_views.connect_context_menu(self.show_context_menu)
 
+    self.file_views.tree_view.selectionModel().selectionChanged.connect(
+      self._on_selection_changed
+    )
+    self.file_views.grid_view.selectionModel().selectionChanged.connect(
+      self._on_selection_changed
+    )
+    # set initial state
+    self._on_selection_changed()
+
     # --- Context menu ---
     self.context_menu = ContextMenuBuilder(self.model, self.trash_path)
+    self.actions.open_terminal.triggered.connect(
+      lambda: self.context_menu._open_terminal(self._current_path())
+    )
 
     # --- Layout ---
     # Left panel: nav buttons row + sidebar
@@ -122,6 +142,22 @@ class FileManager(QMainWindow):
 
     # Initial navigation
     self.navigate_to(QDir.homePath(), add_to_history=False)
+  
+  def _on_selection_changed(self):
+    has_selection = len(self._current_selection()) > 0
+    for action in [
+      self.actions.rename,
+      self.actions.cut,
+      self.actions.copy,
+      self.actions.move_to_trash,
+      self.actions.restore,
+      self.actions.delete,
+      self.actions.copy_path,
+      self.actions.properties,
+      self.actions.open,
+      self.actions.open_new_win,
+    ]:
+      action.setEnabled(has_selection)
 
   # ---------------------------------------------------------------------------
   # Navigation
@@ -183,22 +219,145 @@ class FileManager(QMainWindow):
   # ---------------------------------------------------------------------------
   # Context menu
   # ---------------------------------------------------------------------------
+  # def show_context_menu(self, pos):
+  #   self.context_menu.build(
+  #     view=self.sender(),
+  #     pos=pos,
+  #     callbacks={
+  #       'open':            self.on_item_double_clicked,
+  #       'open_new_window': self.open_in_new_window,
+  #       'move_to_trash':   self.trash.move_to_trash,
+  #       'restore':         self.trash.restore,
+  #       'delete':          self.trash.delete_permanently,
+  #       'empty_trash':     self.trash.empty_trash,
+  #       'create_file':     self.file_ops.create_file,
+  #       'create_folder':   self.file_ops.create_folder,
+  #       'rename':          self.file_ops.rename
+  #     }
+  #   )
   def show_context_menu(self, pos):
-    self.context_menu.build(
-      view=self.sender(),
-      pos=pos,
-      callbacks={
-        'open':            self.on_item_double_clicked,
-        'open_new_window': self.open_in_new_window,
-        'move_to_trash':   self.trash.move_to_trash,
-        'restore':         self.trash.restore,
-        'delete':          self.trash.delete_permanently,
-        'empty_trash':     self.trash.empty_trash,
-        'create_file':     self.file_ops.create_file,
-        'create_folder':   self.file_ops.create_folder,
-        'rename':          self.file_ops.rename
-      }
+    view  = self.sender()
+    index = view.indexAt(pos)
+    self.context_menu.build(view, pos, self.actions)
+
+  # ---------------------------------------------------------------------------
+  # Helpers
+  # ---------------------------------------------------------------------------
+  def _current_path(self) -> str:
+    return self.model.filePath(self.file_views.tree_view.rootIndex())
+
+  def _current_selection(self) -> list[str]:
+    view = self.file_views.current_view
+    return [
+      self.model.filePath(i)
+      for i in view.selectedIndexes()
+      if i.column() == 0
+    ]
+
+  def _on_selection(self, fn):
+    """Calls fn(path) for each selected item."""
+    for path in self._current_selection():
+      fn(path)
+
+  def _on_rename(self):
+    paths = self._current_selection()
+    if paths:
+      self.file_ops.rename(paths[0])
+
+  def _show_properties(self):
+    # TODO: implement properties dialog
+    pass
+
+  ZOOM_SIZES = [32, 48, 64, 72, 96, 128]
+
+  def zoom_in(self):
+    current = self.file_views.grid_view.iconSize().width()
+    bigger  = [s for s in self.ZOOM_SIZES if s > current]
+    if bigger:
+      self._set_zoom(bigger[0])
+
+  def zoom_out(self):
+    current = self.file_views.grid_view.iconSize().width()
+    smaller = [s for s in self.ZOOM_SIZES if s < current]
+    if smaller:
+      self._set_zoom(smaller[-1])
+
+  def zoom_reset(self):
+    self._set_zoom(72)
+
+  def _set_zoom(self, size: int):
+    from PySide6.QtCore import QSize
+    self.file_views.grid_view.setIconSize(QSize(size, size))
+    self.file_views.grid_view.setGridSize(QSize(size + 68, size + 24))
+
+  # Sort
+  def sort_by(self, field: str):
+    col = {'name': 0, 'size': 1, 'date': 3}.get(field, 0)
+    order = (
+      Qt.AscendingOrder
+      if self.actions.sort_asc.isChecked()
+      else Qt.DescendingOrder
     )
+    self.file_views.tree_view.sortByColumn(col, order)
+    self.model.sort(col, order)
+
+  def sort_by_order(self, order):
+    self.sort_by(
+      'name' if self.actions.sort_name.isChecked()
+      else 'size' if self.actions.sort_size.isChecked()
+      else 'date'
+    )
+
+  def _set_view(self, index: int):
+    self.file_views.stack.setCurrentIndex(index)
+    self.actions.view_grid.setChecked(index == 1)
+    self.actions.view_tree.setChecked(index == 0)
+
+  # ---------------------------------------------------------------------------
+  # Actions
+  # ---------------------------------------------------------------------------
+  def _connect_actions(self):
+    a = self.actions
+
+    # Navigation
+    a.go_home.triggered.connect(lambda: self.navigate_to(QDir.homePath()))
+    a.go_up.triggered.connect(self.navigate_up)
+    a.go_back.triggered.connect(self.navigate_back)
+    a.go_forward.triggered.connect(self.navigate_forward)
+
+    # View
+    a.view_grid.triggered.connect(lambda: self._set_view(1))
+    a.view_tree.triggered.connect(lambda: self._set_view(0))
+    a.zoom_in.triggered.connect(self.zoom_in)
+    a.zoom_out.triggered.connect(self.zoom_out)
+    a.zoom_reset.triggered.connect(self.zoom_reset)
+    a.show_hidden.triggered.connect(
+      lambda checked: self.model.set_show_hidden(checked)
+    )
+
+    # Sort
+    a.sort_name.triggered.connect(lambda: self.sort_by('name'))
+    a.sort_size.triggered.connect(lambda: self.sort_by('size'))
+    a.sort_date.triggered.connect(lambda: self.sort_by('date'))
+    a.sort_asc.triggered.connect(lambda: self.sort_by_order(Qt.AscendingOrder))
+    a.sort_desc.triggered.connect(lambda: self.sort_by_order(Qt.DescendingOrder))
+
+    # File ops
+    a.rename.triggered.connect(lambda: self._on_rename())
+    a.move_to_trash.triggered.connect(lambda: self._on_selection(self.trash.move_to_trash))
+    a.restore.triggered.connect(lambda: self._on_selection(self.trash.restore))
+    a.delete.triggered.connect(lambda: self._on_selection(self.trash.delete_permanently))
+    a.empty_trash.triggered.connect(self.trash.empty_trash)
+    a.create_file.triggered.connect(
+      lambda: self.file_ops.create_file(self._current_path())
+    )
+    a.create_folder.triggered.connect(
+      lambda: self.file_ops.create_folder(self._current_path())
+    )
+    a.copy_path.triggered.connect(
+      lambda: QApplication.clipboard().setText(self._current_path())
+    )
+    a.properties.triggered.connect(lambda: self._show_properties())
 
   def open_in_new_window(self, path):
     new_window = FileManager()
