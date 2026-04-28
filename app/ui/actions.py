@@ -1,5 +1,3 @@
-# from PySide6.QtGui import QAction, QKeySequence
-# from PySide6.QtWidgets import QApplication, QStyle, QActionGroup
 from PySide6.QtGui import QAction, QKeySequence, QActionGroup
 from PySide6.QtWidgets import QApplication, QStyle
 
@@ -28,11 +26,9 @@ class ActionRegistry:
     self.go_forward = self._action("Forward",        QStyle.SP_ArrowForward,  "Alt+Right")
 
     # --- View ---
-    # self.view_grid = self._action("Grid View", QStyle.SP_FileDialogContentsView, checkable=True)
-    # self.view_tree = self._action("Tree View", QStyle.SP_FileDialogDetailedView, checkable=True)
     self.view_grid = self._action("Grid View", checkable=True)
     self.view_tree = self._action("Tree View", checkable=True)
-    self.view_grid.setChecked(True)  # default
+    self.view_grid.setChecked(True)
 
     self.view_group = QActionGroup(self.parent)
     self.view_group.setExclusive(True)

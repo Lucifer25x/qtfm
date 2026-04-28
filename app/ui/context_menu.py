@@ -1,5 +1,6 @@
 import subprocess
-from PySide6.QtWidgets import QMenu
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMenu, QStyle
 from pathlib import Path
 import shutil
 import os
@@ -56,9 +57,9 @@ class ContextMenuBuilder:
           menu.addAction(actions.open)
           menu.addAction(actions.open_new_win)
 
-        # menu.addAction(actions.open_terminal)
-        term_action = menu.addAction("Open Terminal Here")
+        term_action = QAction(actions.open_terminal.icon(), "Open Terminal Here", menu)
         term_action.triggered.connect(lambda: self._open_terminal(target_path))
+        menu.addAction(term_action)
         menu.addSeparator()
 
       if index.isValid():
