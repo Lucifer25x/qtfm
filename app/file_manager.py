@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
-  QHBoxLayout, QVBoxLayout, QMainWindow, QSplitter,
-  QSizePolicy, QWidget, QApplication
+  QHBoxLayout, QVBoxLayout, QMainWindow, QSplitter, QLabel,
+  QSizePolicy, QWidget, QApplication, QMessageBox, QTabWidget
 )
 from PySide6.QtCore import QDir, Qt
 from .core.model import FileModel
@@ -12,6 +12,7 @@ from .ui.views import FileViews
 from .ui.context_menu import ContextMenuBuilder
 from .ui.actions import ActionRegistry
 from .ui.menubar import AppMenuBar
+from .ui.dialogs import PropertiesDialog
 from pathlib import Path
 import os
 
@@ -219,22 +220,6 @@ class FileManager(QMainWindow):
   # ---------------------------------------------------------------------------
   # Context menu
   # ---------------------------------------------------------------------------
-  # def show_context_menu(self, pos):
-  #   self.context_menu.build(
-  #     view=self.sender(),
-  #     pos=pos,
-  #     callbacks={
-  #       'open':            self.on_item_double_clicked,
-  #       'open_new_window': self.open_in_new_window,
-  #       'move_to_trash':   self.trash.move_to_trash,
-  #       'restore':         self.trash.restore,
-  #       'delete':          self.trash.delete_permanently,
-  #       'empty_trash':     self.trash.empty_trash,
-  #       'create_file':     self.file_ops.create_file,
-  #       'create_folder':   self.file_ops.create_folder,
-  #       'rename':          self.file_ops.rename
-  #     }
-  #   )
   def show_context_menu(self, pos):
     view  = self.sender()
     index = view.indexAt(pos)
@@ -265,8 +250,11 @@ class FileManager(QMainWindow):
       self.file_ops.rename(paths[0])
 
   def _show_properties(self):
-    # TODO: implement properties dialog
-    pass
+    paths = self._current_selection()
+    if not paths:
+      return
+    dlg = PropertiesDialog(paths[0], self.model, self)
+    dlg.exec()    
 
   ZOOM_SIZES = [32, 48, 64, 72, 96, 128]
 
