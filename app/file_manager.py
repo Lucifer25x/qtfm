@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import (
-  QHBoxLayout, QVBoxLayout, QMainWindow, QSplitter, QLabel,
-  QSizePolicy, QWidget, QApplication, QMessageBox, QTabWidget
+  QHBoxLayout, QVBoxLayout, QMainWindow, QSplitter,
+  QSizePolicy, QWidget, QApplication
 )
-from PySide6.QtCore import QDir, Qt
+from PySide6.QtCore import QDir, Qt, QSize
 from .core.model import FileModel
 from .core.trash import TrashManager
 from .utils.file_ops import FileOps
@@ -18,84 +18,84 @@ import os
 
 
 class FileManager(QMainWindow):
+  ZOOM_SIZES = [32, 48, 64, 72, 96, 128]
+
   def __init__(self):
     super().__init__()
     self.setWindowTitle("QtFM")
     self.resize(1000, 600)
 
-    # History stacks
-    self.back_stack = []
+    self.back_stack  = []
     self.forward_stack = []
-    
-    self._windows = []
+    self._windows    = []
 
-    # Model
+    # -------------------------------------------------------------------------
+    # 1. Core — no UI dependencies
+    # -------------------------------------------------------------------------
     self.model = FileModel()
     self.model.setFilter(QDir.AllEntries | QDir.NoDotAndDotDot | QDir.Hidden | QDir.System)
     self.model.setRootPath(QDir.rootPath())
 
-    # Trash
-    self.trash = TrashManager(self)
+    self.trash      = TrashManager(self)
     self.trash_path = self.trash.trash_path
+    self.file_ops   = FileOps(self)
 
-    # Actions
-    self.actions = ActionRegistry(self)
-    self._connect_actions()
-    self.setMenuBar(AppMenuBar(self.actions, self))
-
-    # File operations
-    self.file_ops = FileOps(self)
-
-    # Sidebar items
+    # -------------------------------------------------------------------------
+    # 2. UI widgets
+    # -------------------------------------------------------------------------
     sidebar_items = [
-      ("Home",      QDir.homePath()),
-      ("Desktop",   QDir.homePath() + "/Desktop"),
-      ("Documents", QDir.homePath() + "/Documents"),
-      ("Downloads", QDir.homePath() + "/Downloads"),
-      ("Music",     QDir.homePath() + "/Music"),
-      ("Pictures",  QDir.homePath() + "/Pictures"),
-      ("Videos",    QDir.homePath() + "/Videos"),
-      (None, None),  # Separator
-      ("File System",  QDir.rootPath()),
-      ("Trash", self.trash_path if os.path.exists(self.trash_path) else ""),
+      ("Home",        QDir.homePath()),
+      ("Desktop",     QDir.homePath() + "/Desktop"),
+      ("Documents",   QDir.homePath() + "/Documents"),
+      ("Downloads",   QDir.homePath() + "/Downloads"),
+      ("Music",       QDir.homePath() + "/Music"),
+      ("Pictures",    QDir.homePath() + "/Pictures"),
+      ("Videos",      QDir.homePath() + "/Videos"),
+      (None, None),
+      ("File System", QDir.rootPath()),
+      ("Trash",       self.trash_path if os.path.exists(self.trash_path) else ""),
     ]
 
-    # --- Sidebar ---
     self.sidebar = SidebarWidget(self.model)
     self.sidebar.populate(sidebar_items)
     self.sidebar.itemClicked.connect(self.navigate_from_sidebar)
 
-    # --- Toolbar ---
     self.toolbar = ToolbarWidget()
     self.toolbar.navigate_requested.connect(self.navigate_to)
-    self.toolbar.home_btn.setDefaultAction(self.actions.go_home)
-    self.toolbar.back_btn.setDefaultAction(self.actions.go_back)
-    self.toolbar.forward_btn.setDefaultAction(self.actions.go_forward)
-    self.toolbar.up_btn.setDefaultAction(self.actions.go_up)
-    self.toolbar.toggle_btn.clicked.connect(self.toggle_view)
+    self.toolbar.search_exited.connect(self._on_search_exited)
+    self.toolbar.search_changed.connect(self._on_search_changed)
 
-    # --- File views ---
     self.file_views = FileViews(self.model)
     self.file_views.connect_double_click(self.on_item_double_clicked)
     self.file_views.connect_context_menu(self.show_context_menu)
-
     self.file_views.tree_view.selectionModel().selectionChanged.connect(
       self._on_selection_changed
     )
     self.file_views.grid_view.selectionModel().selectionChanged.connect(
       self._on_selection_changed
     )
-    # set initial state
+
+    self.context_menu = ContextMenuBuilder(self.model, self.trash_path)
+
+    # -------------------------------------------------------------------------
+    # 3. Actions — must come after all widgets exist
+    # -------------------------------------------------------------------------
+    self.actions = ActionRegistry(self)
+    self._connect_actions()
+    self.setMenuBar(AppMenuBar(self.actions, self))
+
+    # Wire nav button actions after ActionRegistry exists
+    self.toolbar.home_btn.setDefaultAction(self.actions.go_home)
+    self.toolbar.back_btn.setDefaultAction(self.actions.go_back)
+    self.toolbar.forward_btn.setDefaultAction(self.actions.go_forward)
+    self.toolbar.up_btn.setDefaultAction(self.actions.go_up)
+    self.toolbar.toggle_btn.clicked.connect(self.toggle_view)
+
     self._on_selection_changed()
 
-    # --- Context menu ---
-    self.context_menu = ContextMenuBuilder(self.model, self.trash_path)
-    self.actions.open_terminal.triggered.connect(
-      lambda: self.context_menu._open_terminal(self._current_path())
-    )
-
-    # --- Layout ---
-    # Left panel: nav buttons row + sidebar
+    # -------------------------------------------------------------------------
+    # 4. Layout
+    # -------------------------------------------------------------------------
     nav_row = QWidget()
     nav_row.setFixedHeight(30)
     nav_layout = QHBoxLayout()
@@ -121,12 +121,11 @@ class FileManager(QMainWindow):
     left_widget.setMinimumWidth(160)
     left_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
-    # Right panel: breadcrumb/path stack + file views
     right_widget = QWidget()
     right_layout = QVBoxLayout()
     right_layout.setContentsMargins(5, 5, 5, 0)
     right_layout.setSpacing(2)
-    right_layout.addWidget(self.toolbar.path_stack)
+    right_layout.addWidget(self.toolbar.path_bar)
     right_layout.addWidget(self.file_views, 1)
     right_widget.setLayout(right_layout)
 
@@ -141,9 +140,15 @@ class FileManager(QMainWindow):
 
     self.setCentralWidget(splitter)
 
-    # Initial navigation
+    # -------------------------------------------------------------------------
+    # 5. Initial navigation
+    # -------------------------------------------------------------------------
     self.navigate_to(QDir.homePath(), add_to_history=False)
-  
+
+  # ---------------------------------------------------------------------------
+  # Selection
+  # ---------------------------------------------------------------------------
+
   def _on_selection_changed(self):
     has_selection = len(self._current_selection()) > 0
     for action in [
@@ -174,7 +179,7 @@ class FileManager(QMainWindow):
           self.forward_stack.clear()
       self.file_views.set_root(index)
       self.file_views.update_status(path)
-      self.setWindowTitle(f"QtFM - {self.model.fileName(index)}")
+      self.setWindowTitle(f"QtFM — {self.model.fileName(index)}")
       self.toolbar.update_nav_buttons(
         can_go_back=len(self.back_stack) > 0,
         can_go_forward=len(self.forward_stack) > 0,
@@ -201,7 +206,7 @@ class FileManager(QMainWindow):
   def navigate_up(self):
     current = self.model.filePath(self.file_views.tree_view.rootIndex())
     parent  = str(Path(current).parent)
-    if parent != current:  # root folder
+    if parent != current:
       self.navigate_to(parent)
 
   def navigate_from_sidebar(self, item):
@@ -212,14 +217,21 @@ class FileManager(QMainWindow):
       self.navigate_to(self.model.filePath(index))
 
   # ---------------------------------------------------------------------------
-  # View toggle
+  # View
   # ---------------------------------------------------------------------------
+
   def toggle_view(self):
     self.file_views.toggle(self.toolbar.toggle_btn)
+
+  def _set_view(self, index: int):
+    self.file_views.stack.setCurrentIndex(index)
+    self.actions.view_grid.setChecked(index == 1)
+    self.actions.view_tree.setChecked(index == 0)
 
   # ---------------------------------------------------------------------------
   # Context menu
   # ---------------------------------------------------------------------------
+
   def show_context_menu(self, pos):
     view  = self.sender()
     index = view.indexAt(pos)
@@ -228,6 +240,7 @@ class FileManager(QMainWindow):
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
+
   def _current_path(self) -> str:
     return self.model.filePath(self.file_views.tree_view.rootIndex())
 
@@ -240,7 +253,6 @@ class FileManager(QMainWindow):
     ]
 
   def _on_selection(self, fn):
-    """Calls fn(path) for each selected item."""
     for path in self._current_selection():
       fn(path)
 
@@ -254,9 +266,11 @@ class FileManager(QMainWindow):
     if not paths:
       return
     dlg = PropertiesDialog(paths[0], self.model, self)
-    dlg.exec()    
+    dlg.exec()
 
-  ZOOM_SIZES = [32, 48, 64, 72, 96, 128]
+  # ---------------------------------------------------------------------------
+  # Zoom
+  # ---------------------------------------------------------------------------
 
   def zoom_in(self):
     current = self.file_views.grid_view.iconSize().width()
@@ -274,13 +288,15 @@ class FileManager(QMainWindow):
     self._set_zoom(72)
 
   def _set_zoom(self, size: int):
-    from PySide6.QtCore import QSize
     self.file_views.grid_view.setIconSize(QSize(size, size))
     self.file_views.grid_view.setGridSize(QSize(size + 68, size + 24))
 
+  # ---------------------------------------------------------------------------
   # Sort
+  # ---------------------------------------------------------------------------
+
   def sort_by(self, field: str):
-    col = {'name': 0, 'size': 1, 'date': 3}.get(field, 0)
+    col   = {'name': 0, 'size': 1, 'date': 3}.get(field, 0)
     order = (
       Qt.AscendingOrder
       if self.actions.sort_asc.isChecked()
@@ -296,14 +312,20 @@ class FileManager(QMainWindow):
       else 'date'
     )
 
-  def _set_view(self, index: int):
-    self.file_views.stack.setCurrentIndex(index)
-    self.actions.view_grid.setChecked(index == 1)
-    self.actions.view_tree.setChecked(index == 0)
+  # ---------------------------------------------------------------------------
+  # Search
+  # ---------------------------------------------------------------------------
+
+  def _on_search_changed(self, query: str):
+    pass
+
+  def _on_search_exited(self):
+    pass
 
   # ---------------------------------------------------------------------------
-  # Actions
+  # Actions wiring
   # ---------------------------------------------------------------------------
+
   def _connect_actions(self):
     a = self.actions
 
@@ -331,21 +353,24 @@ class FileManager(QMainWindow):
     a.sort_desc.triggered.connect(lambda: self.sort_by_order(Qt.DescendingOrder))
 
     # File ops
-    a.rename.triggered.connect(lambda: self._on_rename())
+    a.rename.triggered.connect(self._on_rename)
     a.move_to_trash.triggered.connect(lambda: self._on_selection(self.trash.move_to_trash))
     a.restore.triggered.connect(lambda: self._on_selection(self.trash.restore))
     a.delete.triggered.connect(lambda: self._on_selection(self.trash.delete_permanently))
     a.empty_trash.triggered.connect(self.trash.empty_trash)
-    a.create_file.triggered.connect(
-      lambda: self.file_ops.create_file(self._current_path())
+    a.create_file.triggered.connect(lambda: self.file_ops.create_file(self._current_path()))
+    a.create_folder.triggered.connect(lambda: self.file_ops.create_folder(self._current_path()))
+    a.copy_path.triggered.connect(lambda: QApplication.clipboard().setText(self._current_path()))
+
+    a.properties.triggered.connect(self._show_properties)
+    a.open_terminal.triggered.connect(
+      lambda: self.context_menu._open_terminal(self._current_path())
     )
-    a.create_folder.triggered.connect(
-      lambda: self.file_ops.create_folder(self._current_path())
-    )
-    a.copy_path.triggered.connect(
-      lambda: QApplication.clipboard().setText(self._current_path())
-    )
-    a.properties.triggered.connect(lambda: self._show_properties())
+    a.search.triggered.connect(self.toolbar._enter_search_mode)
+
+  # ---------------------------------------------------------------------------
+  # New window
+  # ---------------------------------------------------------------------------
 
   def open_in_new_window(self, path):
     new_window = FileManager()

@@ -2,13 +2,16 @@ from PySide6.QtWidgets import (
   QWidget, QHBoxLayout, QStackedWidget, QMenu,
   QToolButton, QLineEdit, QLabel, QApplication, QStyle
 )
-from PySide6.QtCore import QDir, Qt, Signal
-from PySide6.QtGui import QPalette
+from PySide6.QtCore import QDir, Qt, Signal, QEvent
+from PySide6.QtGui import QPalette, QIcon
 from ..core.path_logic import PathLinkedList
 import os
 
+
 class ToolbarWidget(QWidget):
   navigate_requested = Signal(str)
+  search_changed     = Signal(str)
+  search_exited      = Signal()
 
   def __init__(self, parent=None):
     super().__init__(parent)
@@ -23,10 +26,15 @@ class ToolbarWidget(QWidget):
     layout.addWidget(self.home_btn)
     layout.addWidget(self.back_btn)
     layout.addWidget(self.forward_btn)
+    layout.addWidget(self.up_btn)
     layout.addWidget(self.toggle_btn)
     layout.addStretch()
     self.setLayout(layout)
     self.setFixedHeight(30)
+
+  # ---------------------------------------------------------------------------
+  # Setup
+  # ---------------------------------------------------------------------------
 
   def _setup_nav_buttons(self):
     style = QApplication.style()
@@ -54,10 +62,17 @@ class ToolbarWidget(QWidget):
     self.up_btn.setEnabled(False)
 
     self.toggle_btn = QToolButton()
-    self.toggle_btn.setIcon(style.standardIcon(
-      QStyle.SP_FileDialogDetailedView))
+    self.toggle_btn.setIcon(style.standardIcon(QStyle.SP_FileDialogDetailedView))
     self.toggle_btn.setText("Grid")
     self.toggle_btn.setAutoRaise(True)
+
+    # Search button
+    self.search_btn = QToolButton()
+    self.search_btn.setIcon(QIcon.fromTheme("system-search"))
+    self.search_btn.setAutoRaise(True)
+    self.search_btn.setToolTip("Search (Ctrl+F)")
+    self.search_btn.setCheckable(True)
+    self.search_btn.clicked.connect(self._toggle_search_mode)
 
   def _setup_path_stack(self):
     self.path_stack = QStackedWidget()
@@ -96,8 +111,59 @@ class ToolbarWidget(QWidget):
     self.path_edit.returnPressed.connect(self._on_path_edited)
     self.path_edit.focusOutEvent = lambda e: self.path_stack.setCurrentIndex(0)
 
-    self.path_stack.addWidget(self.breadcrumb_widget)
-    self.path_stack.addWidget(self.path_edit)
+    # Page 2 — search input
+    self.search_edit = QLineEdit()
+    self.search_edit.setPlaceholderText("Search in current folder…")
+    self.search_edit.setClearButtonEnabled(True)
+    self.search_edit.textChanged.connect(self.search_changed.emit)
+    self.search_edit.installEventFilter(self)
+
+    self.path_stack.addWidget(self.breadcrumb_widget)  # index 0
+    self.path_stack.addWidget(self.path_edit)           # index 1
+    self.path_stack.addWidget(self.search_edit)         # index 2
+
+    # Wrap path_stack + search_btn
+    self.path_bar = QWidget()
+    path_bar_layout = QHBoxLayout()
+    path_bar_layout.setContentsMargins(0, 0, 0, 0)
+    path_bar_layout.setSpacing(2)
+    path_bar_layout.addWidget(self.path_stack)
+    path_bar_layout.addWidget(self.search_btn)
+    self.path_bar.setLayout(path_bar_layout)
+    self.path_bar.setFixedHeight(30)
+
+  # ---------------------------------------------------------------------------
+  # Search mode
+  # ---------------------------------------------------------------------------
+
+  def _toggle_search_mode(self, checked: bool):
+    if checked:
+      self._enter_search_mode()
+    else:
+      self.exit_search_mode()
+
+  def _enter_search_mode(self):
+    self.search_edit.clear()
+    self.path_stack.setCurrentIndex(2)
+    self.search_edit.setFocus()
+    self.search_btn.setChecked(True)
+
+  def exit_search_mode(self):
+    self.search_btn.setChecked(False)
+    self.search_edit.clear()
+    self.path_stack.setCurrentIndex(0)
+    self.search_exited.emit()
+
+  def eventFilter(self, obj, event):
+    if obj is self.search_edit and event.type() == QEvent.KeyPress:
+      if event.key() == Qt.Key_Escape:
+        self.exit_search_mode()
+        return True
+    return super().eventFilter(obj, event)
+
+  # ---------------------------------------------------------------------------
+  # Breadcrumbs
+  # ---------------------------------------------------------------------------
 
   def update_breadcrumbs(self, path):
     while self.breadcrumb_layout.count():
@@ -106,21 +172,20 @@ class ToolbarWidget(QWidget):
         item.widget().deleteLater()
 
     path_list = PathLinkedList(path)
-    current = path_list.head
+    current   = path_list.head
 
     crumbs = []
     while current:
       crumbs.append((current.name, current.full_path))
       current = current.next
 
-    # Collapse middle crumbs if too many
     MAX_CRUMBS = 4
     if len(crumbs) > MAX_CRUMBS:
       visible = [crumbs[0]] + crumbs[-(MAX_CRUMBS - 1):]
-      hidden = crumbs[1:-(MAX_CRUMBS - 1)]
+      hidden  = crumbs[1:-(MAX_CRUMBS - 1)]
     else:
       visible = crumbs
-      hidden = []
+      hidden  = []
 
     for i, (name, full_path) in enumerate(visible):
       if hidden and i == 1:
@@ -137,17 +202,14 @@ class ToolbarWidget(QWidget):
         overflow_btn.setMenu(overflow_menu)
         overflow_btn.setPopupMode(QToolButton.InstantPopup)
         self.breadcrumb_layout.addWidget(overflow_btn)
-        # self.breadcrumb_layout.addWidget(QLabel('›'))
         self.breadcrumb_layout.addWidget(self._make_separator())
 
       btn = QToolButton()
       btn.setCursor(Qt.CursorShape.PointingHandCursor)
       btn.setAutoRaise(True)
 
-      # Special icon for root
       if full_path == QDir.rootPath():
-        btn.setIcon(QApplication.style().standardIcon(
-          QStyle.SP_DriveHDIcon))
+        btn.setIcon(QApplication.style().standardIcon(QStyle.SP_DriveHDIcon))
         btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
       else:
         btn.setText(name)
@@ -173,8 +235,14 @@ class ToolbarWidget(QWidget):
 
   def _make_separator(self):
     sep = QLabel('›')
-    sep.setStyleSheet(f"color: {self.palette.color(QPalette.PlaceholderText).name()};")
+    sep.setStyleSheet(
+      f"color: {self.palette.color(QPalette.PlaceholderText).name()};"
+    )
     return sep
+
+  # ---------------------------------------------------------------------------
+  # Path edit
+  # ---------------------------------------------------------------------------
 
   def update_nav_buttons(self, can_go_back, can_go_forward, can_go_up):
     self.back_btn.setEnabled(can_go_back)
@@ -187,7 +255,6 @@ class ToolbarWidget(QWidget):
     self.path_edit.selectAll()
 
   def set_current_path(self, path):
-    """Called by FileManager after each navigation so edit mode has the right value."""
     self.path_edit.setText(path)
     self.path_edit.setStyleSheet("")
 
