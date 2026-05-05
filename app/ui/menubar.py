@@ -45,6 +45,8 @@ class AppMenuBar(QMenuBar):
     view_menu.addAction(a.zoom_in)
     view_menu.addAction(a.zoom_out)
     view_menu.addAction(a.zoom_reset)
+    view_menu.addSeparator()
+    view_menu.addAction(a.search)
 
     # Go
     go_menu = self.addMenu("Go")

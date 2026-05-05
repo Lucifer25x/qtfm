@@ -80,7 +80,7 @@ class ActionRegistry:
     self.create_folder = self._action("Create New Folder",QStyle.SP_DirIcon)
     self.copy_path     = self._action("Copy Path")
     self.properties    = self._action("Properties",       None, "Alt+Return")
-    self.search = self._action("Search", None)
+    self.search = self._action("Search", None, "Ctrl+F")
 
     # --- Terminal ---
     self.open_terminal = self._action("Open Terminal Here", QStyle.SP_ComputerIcon)
