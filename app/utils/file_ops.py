@@ -1,9 +1,12 @@
 from PySide6.QtWidgets import QInputDialog, QMessageBox
 import os
+import shutil
 
 class FileOps:
   def __init__(self, parent_widget):
     self.parent = parent_widget
+    self.clipboard = []
+    self.operation = None
 
   def create_file(self, target_path: str):
     file_name, ok = QInputDialog.getText(self.parent, "Create New File", "Enter file name:")
@@ -41,3 +44,46 @@ class FileOps:
       os.rename(path, new_path)
     except Exception as e:
       QMessageBox.critical(self.parent, "Error", f"Failed to rename: {str(e)}")
+
+  def copy(self, paths: list[str]):
+    self.clipboard = paths[:]
+    self.operation = "copy"
+
+  def cut(self, paths: list[str]):
+    self.clipboard = paths[:]
+    self.operation = "cut"
+
+  # TODO: Maybe use QProgressDialog
+  def paste(self, target_path: str):
+    # FIXME: Target shows the current directory
+    # FIXME: Can't see paste option inside folder (can see for selection)
+    print(f"Pasting {self.clipboard} to {target_path} with operation {self.operation}")
+    if not self.clipboard or not self.operation:
+      return
+    for src in self.clipboard:
+      base_name = os.path.basename(src)
+      dst = os.path.join(target_path, base_name)
+
+      if src == dst:
+        continue
+      if os.path.commonpath([src, dst]) == src:
+        QMessageBox.warning(self.parent, "Error", f"Cannot paste '{base_name}' into itself or its subdirectory.")
+        continue
+
+      # TODO: Maybe add option to replace or add suffix if exists
+      if os.path.exists(dst):
+        QMessageBox.warning(self.parent, "Error", f"'{base_name}' already exists in the target location.")
+        continue
+      try:
+        if self.operation == "copy":
+          if os.path.isdir(src):
+            shutil.copytree(src, dst)
+          else:
+            shutil.copy2(src, dst)
+        elif self.operation == "cut":
+          shutil.move(src, dst)
+      except Exception as e:
+        QMessageBox.critical(self.parent, "Error", f"Failed to paste '{base_name}': {str(e)}")
+    if self.operation == "cut":
+      self.clipboard.clear()
+      self.operation = None

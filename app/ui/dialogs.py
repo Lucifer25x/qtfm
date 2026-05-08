@@ -14,16 +14,6 @@ class SizeWorker(QThread):
     super().__init__()
     self.path = path
 
-  # def run(self):
-  #   total = 0
-  #   for dirpath, _, files in os.walk(self.path):
-  #     for f in files:
-  #       fp = os.path.join(dirpath, f)
-  #       try:
-  #         total += os.lstat(fp).st_size  # lstat reads the link itself, not the target
-  #       except (FileNotFoundError, PermissionError, OSError):
-  #         continue
-  #   self.result.emit(total)
   def run(self):
     if not os.path.isdir(self.path):
       self.result.emit(float(os.lstat(self.path).st_size))

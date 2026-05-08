@@ -63,7 +63,7 @@ class FileManager(QMainWindow):
     self.toolbar = ToolbarWidget()
     self.toolbar.navigate_requested.connect(self.navigate_to)
     self.toolbar.search_exited.connect(self._on_search_exited)
-    self.toolbar.search_changed.connect(self._on_search_changed)
+    # self.toolbar.search_changed.connect(self._on_search_changed)
 
     self.file_views = FileViews(self.model)
     self.file_views.connect_double_click(self.on_item_double_clicked)
@@ -151,6 +151,7 @@ class FileManager(QMainWindow):
 
   def _on_selection_changed(self):
     has_selection = len(self._current_selection()) > 0
+    has_clipboard = bool(self.file_ops.clipboard)
     for action in [
       self.actions.rename,
       self.actions.cut,
@@ -164,6 +165,7 @@ class FileManager(QMainWindow):
       self.actions.open_new_win,
     ]:
       action.setEnabled(has_selection)
+    self.actions.paste.setEnabled(has_clipboard)
 
   # ---------------------------------------------------------------------------
   # Navigation
@@ -361,6 +363,9 @@ class FileManager(QMainWindow):
     a.create_file.triggered.connect(lambda: self.file_ops.create_file(self._current_path()))
     a.create_folder.triggered.connect(lambda: self.file_ops.create_folder(self._current_path()))
     a.copy_path.triggered.connect(lambda: QApplication.clipboard().setText(self._current_path()))
+    a.copy.triggered.connect(lambda: self.file_ops.copy(self._current_selection()))
+    a.cut.triggered.connect(lambda: self.file_ops.cut(self._current_selection()))
+    a.paste.triggered.connect(lambda: self.file_ops.paste(self._current_path()))
 
     a.properties.triggered.connect(self._show_properties)
     a.open_terminal.triggered.connect(

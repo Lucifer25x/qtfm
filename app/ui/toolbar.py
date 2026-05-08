@@ -117,6 +117,7 @@ class ToolbarWidget(QWidget):
     self.search_edit.setClearButtonEnabled(True)
     self.search_edit.textChanged.connect(self.search_changed.emit)
     self.search_edit.installEventFilter(self)
+    self.search_edit.returnPressed.connect(self.exit_search_mode)
 
     self.path_stack.addWidget(self.breadcrumb_widget)  # index 0
     self.path_stack.addWidget(self.path_edit)           # index 1

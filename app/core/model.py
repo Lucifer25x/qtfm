@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QFileSystemModel
 from PySide6.QtCore import QDir
+from app.core.icon_provider import FileIconProvider
 
 class FileModel(QFileSystemModel):
   def __init__(self, parent=None):
@@ -7,6 +8,7 @@ class FileModel(QFileSystemModel):
     self.setRootPath(QDir.rootPath())
     self._show_hidden = True
     self._apply_filter()
+    self.setIconProvider(FileIconProvider())
 
   def _apply_filter(self):
     base = QDir.AllEntries | QDir.NoDotAndDotDot | QDir.System
