@@ -151,7 +151,6 @@ class FileManager(QMainWindow):
 
   def _on_selection_changed(self):
     has_selection = len(self._current_selection()) > 0
-    has_clipboard = bool(self.file_ops.clipboard)
     for action in [
       self.actions.rename,
       self.actions.cut,
@@ -165,7 +164,7 @@ class FileManager(QMainWindow):
       self.actions.open_new_win,
     ]:
       action.setEnabled(has_selection)
-    self.actions.paste.setEnabled(has_clipboard)
+    self.actions.paste.setEnabled(self.file_ops.has_clipboard())
 
   # ---------------------------------------------------------------------------
   # Navigation
@@ -324,6 +323,14 @@ class FileManager(QMainWindow):
   def _on_search_exited(self):
     pass
 
+  # ----------------------------------------------------------------------------
+  # Paste
+  # ----------------------------------------------------------------------------
+
+  def _on_paste(self):
+    self.file_ops.paste(self._current_path())
+    self.actions.paste.setEnabled(self.file_ops.has_clipboard())
+
   # ---------------------------------------------------------------------------
   # Actions wiring
   # ---------------------------------------------------------------------------
@@ -363,9 +370,15 @@ class FileManager(QMainWindow):
     a.create_file.triggered.connect(lambda: self.file_ops.create_file(self._current_path()))
     a.create_folder.triggered.connect(lambda: self.file_ops.create_folder(self._current_path()))
     a.copy_path.triggered.connect(lambda: QApplication.clipboard().setText(self._current_path()))
-    a.copy.triggered.connect(lambda: self.file_ops.copy(self._current_selection()))
-    a.cut.triggered.connect(lambda: self.file_ops.cut(self._current_selection()))
-    a.paste.triggered.connect(lambda: self.file_ops.paste(self._current_path()))
+    a.copy.triggered.connect(lambda: (
+      self.file_ops.copy(self._current_selection()),
+      self.actions.paste.setEnabled(True)
+    ))
+    a.cut.triggered.connect(lambda: (
+      self.file_ops.cut(self._current_selection()),
+      self.actions.paste.setEnabled(True)
+    ))
+    a.paste.triggered.connect(self._on_paste)
 
     a.properties.triggered.connect(self._show_properties)
     a.open_terminal.triggered.connect(

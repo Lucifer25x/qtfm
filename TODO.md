@@ -4,5 +4,4 @@
 - Context menu:
   - (Un)Compress using huffman
   - copy/cut/paste
-- Multiple selection (using shift and ctrl)
 - Undo/Redo

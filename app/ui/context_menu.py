@@ -71,6 +71,9 @@ class ContextMenuBuilder:
         menu.addSeparator()
         menu.addAction(actions.move_to_trash)
 
+      if not viewing_trash:
+        menu.addAction(actions.paste)
+
       menu.addAction(actions.copy_path)
 
       if is_dir or not index.isValid():
