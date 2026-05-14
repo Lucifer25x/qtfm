@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
   QHBoxLayout, QVBoxLayout, QMainWindow, QSplitter,
   QSizePolicy, QWidget, QApplication
 )
-from PySide6.QtCore import QDir, Qt, QSize
+from PySide6.QtCore import QDir, Qt, QSize, QTimer
 from .core.model import FileModel
 from .core.trash import TrashManager
 from .utils.file_ops import FileOps
@@ -13,6 +13,7 @@ from .ui.context_menu import ContextMenuBuilder
 from .ui.actions import ActionRegistry
 from .ui.menubar import AppMenuBar
 from .ui.dialogs import PropertiesDialog
+from .algorithms.search_worker import SearchWorker
 from pathlib import Path
 import os
 
@@ -25,9 +26,9 @@ class FileManager(QMainWindow):
     self.setWindowTitle("QtFM")
     self.resize(1000, 600)
 
-    self.back_stack  = []
+    self.back_stack    = []
     self.forward_stack = []
-    self._windows    = []
+    self._windows      = []
 
     # -------------------------------------------------------------------------
     # 1. Core — no UI dependencies
@@ -39,6 +40,13 @@ class FileManager(QMainWindow):
     self.trash      = TrashManager(self)
     self.trash_path = self.trash.trash_path
     self.file_ops   = FileOps(self)
+
+    # Search state
+    self._search_worker = None
+    self._search_root   = ''
+    self._poll_timer    = QTimer()
+    self._poll_timer.setInterval(50)
+    self._poll_timer.timeout.connect(self._poll_results)
 
     # -------------------------------------------------------------------------
     # 2. UI widgets
@@ -62,8 +70,8 @@ class FileManager(QMainWindow):
 
     self.toolbar = ToolbarWidget()
     self.toolbar.navigate_requested.connect(self.navigate_to)
+    self.toolbar.search_changed.connect(self._on_search_triggered)
     self.toolbar.search_exited.connect(self._on_search_exited)
-    # self.toolbar.search_changed.connect(self._on_search_changed)
 
     self.file_views = FileViews(self.model)
     self.file_views.connect_double_click(self.on_item_double_clicked)
@@ -73,6 +81,10 @@ class FileManager(QMainWindow):
     )
     self.file_views.grid_view.selectionModel().selectionChanged.connect(
       self._on_selection_changed
+    )
+    # Connect search result double-click
+    self.file_views.search_results.result_activated.connect(
+      self._on_search_result_activated
     )
 
     self.context_menu = ContextMenuBuilder(self.model, self.trash_path)
@@ -84,7 +96,6 @@ class FileManager(QMainWindow):
     self._connect_actions()
     self.setMenuBar(AppMenuBar(self.actions, self))
 
-    # Wire nav button actions after ActionRegistry exists
     self.toolbar.home_btn.setDefaultAction(self.actions.go_home)
     self.toolbar.back_btn.setDefaultAction(self.actions.go_back)
     self.toolbar.forward_btn.setDefaultAction(self.actions.go_forward)
@@ -171,6 +182,14 @@ class FileManager(QMainWindow):
   # ---------------------------------------------------------------------------
 
   def navigate_to(self, path, add_to_history=True, clear_forward_stack=True):
+    # Exit search mode silently if active
+    if self.file_views.is_searching():
+      self._stop_search()
+      self.toolbar.search_btn.setChecked(False)
+      self.toolbar.search_edit.clear()
+      self.toolbar.path_stack.setCurrentIndex(0)
+      self.file_views.hide_search()
+
     index = self.model.index(path)
     if index.isValid():
       if add_to_history:
@@ -178,6 +197,8 @@ class FileManager(QMainWindow):
         self.back_stack.append(current_path)
         if clear_forward_stack:
           self.forward_stack.clear()
+      if self.file_views.stack.currentIndex() == 2:
+        self.file_views.stack.setCurrentIndex(self.file_views._last_view)
       self.file_views.set_root(index)
       self.file_views.update_status(path)
       self.setWindowTitle(f"QtFM — {self.model.fileName(index)}")
@@ -234,6 +255,8 @@ class FileManager(QMainWindow):
   # ---------------------------------------------------------------------------
 
   def show_context_menu(self, pos):
+    if self.file_views.is_searching():
+      return
     view  = self.sender()
     index = view.indexAt(pos)
     self.context_menu.build(view, pos, self.actions)
@@ -246,6 +269,8 @@ class FileManager(QMainWindow):
     return self.model.filePath(self.file_views.tree_view.rootIndex())
 
   def _current_selection(self) -> list[str]:
+    if self.file_views.is_searching():
+      return []
     view = self.file_views.current_view
     return [
       self.model.filePath(i)
@@ -317,15 +342,90 @@ class FileManager(QMainWindow):
   # Search
   # ---------------------------------------------------------------------------
 
-  def _on_search_changed(self, query: str):
-    pass
+  def _stop_search(self):
+    self._poll_timer.stop()
+    if self._search_worker:
+      self._search_worker.stop()
+      self._search_worker = None
+
+  def _on_search_triggered(self, query: str):
+    """Called when user presses Enter in the search box."""
+    query = query.strip()
+    if not query:
+      self._on_search_exited()
+      return
+
+    # Determine search root based on scope action
+    if self.actions.search_fs.isChecked():
+      self._search_root = QDir.rootPath()
+    else:
+      self._search_root = self._current_path()
+
+    if not self._search_root or not os.path.isdir(self._search_root):
+      return
+
+    # Stop any previous search
+    self._stop_search()
+
+    # Switch to search results view
+    self.file_views.show_search()
+    self.file_views.update_status_text(f"Searching for '{query}'…")
+    self.setWindowTitle(f"QtFM — Search: '{query}'")
+
+    # Start worker
+    self._search_worker = SearchWorker(
+      root=self._search_root,
+      query=query,
+      use_bfs=self.actions.search_bfs.isChecked()
+    )
+    self._search_worker.start()
+    self._poll_timer.start()
+
+  def _poll_results(self):
+    """Called every 50ms by QTimer — drains queue and updates UI."""
+    if not self._search_worker:
+      self._poll_timer.stop()
+      return
+
+    results, done = self._search_worker.drain()
+
+    for path in results:
+      self.file_views.search_results.add_result(path)
+
+    if done:
+      self._poll_timer.stop()
+      self._search_worker = None
+      count = self.file_views.search_results.count()
+      query = self.toolbar.search_edit.text()
+      msg   = (
+        f"{count} result{'s' if count != 1 else ''} for '{query}'"
+        if count > 0 else "No results found"
+      )
+      self.file_views.update_status_text(msg)
+      self.setWindowTitle(f"QtFM — Search: '{query}' ({count} results)")
+
+  def _on_search_result_activated(self, path: str):
+    target = os.path.dirname(path) if not os.path.isdir(path) else path
+    self._stop_search()
+    self.toolbar.search_btn.setChecked(False)
+    self.toolbar.search_edit.clear()
+    self.toolbar.path_stack.setCurrentIndex(0)
+    self.file_views.hide_search()
+    self.navigate_to(target)
 
   def _on_search_exited(self):
-    pass
+    """Called when user presses Escape or clicks search button again."""
+    self._stop_search()
+    self.file_views.hide_search()
+    path = self._search_root or self._current_path() or QDir.homePath()
+    if not os.path.isdir(path):
+      path = QDir.homePath()
+    self.file_views.update_status(path)
+    self.setWindowTitle(f"QtFM — {os.path.basename(path)}")
 
-  # ----------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
   # Paste
-  # ----------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
 
   def _on_paste(self):
     self.file_ops.paste(self._current_path())
@@ -363,16 +463,25 @@ class FileManager(QMainWindow):
 
     # File ops
     a.rename.triggered.connect(self._on_rename)
-    # a.move_to_trash.triggered.connect(lambda: self._on_selection(self.trash.move_to_trash))
-    a.move_to_trash.triggered.connect(lambda: self.trash.move_many_to_trash(self._current_selection()))
-    # a.restore.triggered.connect(lambda: self._on_selection(self.trash.restore))
-    a.restore.triggered.connect(lambda: self.trash.restore_many(self._current_selection()))
-    # a.delete.triggered.connect(lambda: self._on_selection(self.trash.delete_permanently))
-    a.delete.triggered.connect(lambda: self.trash.delete_many_permanently(self._current_selection()))
+    a.move_to_trash.triggered.connect(
+      lambda: self.trash.move_many_to_trash(self._current_selection())
+    )
+    a.restore.triggered.connect(
+      lambda: self.trash.restore_many(self._current_selection())
+    )
+    a.delete.triggered.connect(
+      lambda: self.trash.delete_many_permanently(self._current_selection())
+    )
     a.empty_trash.triggered.connect(self.trash.empty_trash)
-    a.create_file.triggered.connect(lambda: self.file_ops.create_file(self._current_path()))
-    a.create_folder.triggered.connect(lambda: self.file_ops.create_folder(self._current_path()))
-    a.copy_path.triggered.connect(lambda: QApplication.clipboard().setText(self._current_path()))
+    a.create_file.triggered.connect(
+      lambda: self.file_ops.create_file(self._current_path())
+    )
+    a.create_folder.triggered.connect(
+      lambda: self.file_ops.create_folder(self._current_path())
+    )
+    a.copy_path.triggered.connect(
+      lambda: QApplication.clipboard().setText(self._current_path())
+    )
     a.copy.triggered.connect(lambda: (
       self.file_ops.copy(self._current_selection()),
       self.actions.paste.setEnabled(True)
@@ -382,12 +491,19 @@ class FileManager(QMainWindow):
       self.actions.paste.setEnabled(True)
     ))
     a.paste.triggered.connect(self._on_paste)
-
     a.properties.triggered.connect(self._show_properties)
     a.open_terminal.triggered.connect(
       lambda: self.context_menu._open_terminal(self._current_path())
     )
+
+    # Search
     a.search.triggered.connect(self.toolbar._enter_search_mode)
+    a.search_here.triggered.connect(
+      lambda: self.toolbar.search_edit.setPlaceholderText("Search in current folder…")
+    )
+    a.search_fs.triggered.connect(
+      lambda: self.toolbar.search_edit.setPlaceholderText("Search in file system…")
+    )
 
   # ---------------------------------------------------------------------------
   # New window

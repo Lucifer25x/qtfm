@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QMenuBar, QMessageBox
-from PySide6.QtCore import Qt
+
 
 class AppMenuBar(QMenuBar):
   def __init__(self, actions, parent=None):
@@ -47,6 +47,12 @@ class AppMenuBar(QMenuBar):
     view_menu.addAction(a.zoom_reset)
     view_menu.addSeparator()
     view_menu.addAction(a.search)
+    search_strategy = view_menu.addMenu("Search Strategy")
+    search_strategy.addAction(a.search_bfs)
+    search_strategy.addAction(a.search_dfs)
+    search_scope = view_menu.addMenu("Search Scope")
+    search_scope.addAction(a.search_here)
+    search_scope.addAction(a.search_fs)
 
     # Go
     go_menu = self.addMenu("Go")
@@ -57,7 +63,7 @@ class AppMenuBar(QMenuBar):
     go_menu.addSeparator()
     go_menu.addAction(a.open_terminal)
 
-    # Help — placeholder for now
+    # Help
     help_menu = self.addMenu("Help")
     about = help_menu.addAction("About QtFM")
     about.triggered.connect(self._show_about)

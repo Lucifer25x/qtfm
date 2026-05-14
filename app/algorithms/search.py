@@ -8,7 +8,7 @@ def dfs(root: str, predicate: Callable[[str], bool]) -> Generator[str, None, Non
     current = stack.pop()
     try:
       entries = list(os.scandir(current))
-    except PermissionError:
+    except (PermissionError, FileNotFoundError, OSError):
       continue
     for entry in entries:
       if predicate(entry.path):
@@ -22,7 +22,7 @@ def bfs(root: str, predicate: Callable[[str], bool]) -> Generator[str, None, Non
     current = queue.popleft()
     try:
       entries = list(os.scandir(current))
-    except PermissionError:
+    except (PermissionError, FileNotFoundError, OSError):
       continue
     for entry in entries:
       if predicate(entry.path):

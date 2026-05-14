@@ -3,5 +3,6 @@
   - Algorithm (dfs/bfs)
 - Context menu:
   - (Un)Compress using huffman
-  - copy/cut/paste
 - Undo/Redo
+- When search is empty and enter is pressed, exit search
+- Real search strategies
