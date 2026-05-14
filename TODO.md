@@ -1,22 +1,8 @@
-- Toolbar like thunar
-- Add search button and implement dfs/bfs
-- Hidden files/dir
-- Zoom in/out
-- Sort (a-z, z-a)
-  - name
-  - size
-  - date
-  - Implement different algorithms
-- Context menu:
-  - (Un)Compress using huffman
-  - Properties window (general and permission)
-  - Maybe: copy/cut/paste
-  - Maybe: add to places
-- Multiple selection (using shift and ctrl)
-- Maybe: Chart stats
-- Undo/Redo
-
 - Search:
   - Scope (file system, current dir)
   - Algorithm (dfs/bfs)
-  - Search on enter
+- Context menu:
+  - (Un)Compress using huffman
+  - copy/cut/paste
+- Multiple selection (using shift and ctrl)
+- Undo/Redo

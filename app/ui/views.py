@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-  QWidget, QVBoxLayout, QStackedWidget,
+  QWidget, QVBoxLayout, QStackedWidget, QAbstractItemView,
   QTreeView, QListView, QHeaderView, QLabel, QHBoxLayout
 )
 from PySide6.QtCore import Qt, QSize
@@ -32,6 +32,7 @@ class FileViews(QWidget):
     for view in [self.tree_view, self.grid_view]:
       view.setModel(model)
       view.setContextMenuPolicy(Qt.CustomContextMenu)
+      view.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
      # Hide "Type" column
     self.tree_view.hideColumn(2)
