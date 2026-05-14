@@ -363,9 +363,12 @@ class FileManager(QMainWindow):
 
     # File ops
     a.rename.triggered.connect(self._on_rename)
-    a.move_to_trash.triggered.connect(lambda: self._on_selection(self.trash.move_to_trash))
-    a.restore.triggered.connect(lambda: self._on_selection(self.trash.restore))
-    a.delete.triggered.connect(lambda: self._on_selection(self.trash.delete_permanently))
+    # a.move_to_trash.triggered.connect(lambda: self._on_selection(self.trash.move_to_trash))
+    a.move_to_trash.triggered.connect(lambda: self.trash.move_many_to_trash(self._current_selection()))
+    # a.restore.triggered.connect(lambda: self._on_selection(self.trash.restore))
+    a.restore.triggered.connect(lambda: self.trash.restore_many(self._current_selection()))
+    # a.delete.triggered.connect(lambda: self._on_selection(self.trash.delete_permanently))
+    a.delete.triggered.connect(lambda: self.trash.delete_many_permanently(self._current_selection()))
     a.empty_trash.triggered.connect(self.trash.empty_trash)
     a.create_file.triggered.connect(lambda: self.file_ops.create_file(self._current_path()))
     a.create_folder.triggered.connect(lambda: self.file_ops.create_folder(self._current_path()))

@@ -46,6 +46,37 @@ class TrashManager:
       QMessageBox.Yes | QMessageBox.No
     )
     return reply == QMessageBox.Yes
+  
+  def _delete_no_confirm(self, path: str):
+    """Delete without asking — used after batch confirmation."""
+    try:
+      shutil.rmtree(path) if os.path.isdir(path) else os.remove(path)
+      self._remove_trashinfo(os.path.basename(path))
+    except Exception as e:
+      QMessageBox.critical(self.parent, "Error", f"Failed to delete '{os.path.basename(path)}': {str(e)}")
+
+  def _restore_no_confirm(self, path: str):
+    """Restore without asking — used after batch confirmation."""
+    name          = os.path.basename(path)
+    info_path     = self._trashinfo_path(name)
+    original_path = self._read_original_path(info_path)
+
+    if not original_path:
+      original_path = os.path.join(
+        QDir.homePath(), os.path.relpath(path, self.trash_path)
+      )
+    if os.path.exists(original_path):
+      QMessageBox.warning(
+        self.parent, "Restore Failed",
+        f"'{os.path.basename(original_path)}' already exists in the original location."
+      )
+      return
+    try:
+      os.makedirs(os.path.dirname(original_path), exist_ok=True)
+      os.rename(path, original_path)
+      self._remove_trashinfo(name)
+    except Exception as e:
+      QMessageBox.critical(self.parent, "Error", f"Failed to restore '{name}': {str(e)}")
 
   def move_to_trash(self, path: str):
     if not self._confirm(
@@ -54,6 +85,32 @@ class TrashManager:
     ):
       return
     send2trash(path)
+
+  def move_many_to_trash(self, paths: list[str]):
+    if not paths:
+      return
+    if len(paths) == 1:
+      self.move_to_trash(paths[0])
+      return
+
+    names = ", ".join(os.path.basename(p) for p in paths[:3])
+    if len(paths) > 3:
+      names += f" and {len(paths) - 3} more"
+
+    if not self._confirm(
+      "Confirm Move to Trash",
+      f"Move {len(paths)} items to the trash?\n{names}"
+    ):
+      return
+
+    for path in paths:
+      try:
+        send2trash(path)
+      except Exception as e:
+        QMessageBox.critical(
+          self.parent, "Error",
+          f"Failed to move '{os.path.basename(path)}' to trash: {str(e)}"
+        )
 
   def restore(self, path: str):
     name          = os.path.basename(path)
@@ -84,6 +141,26 @@ class TrashManager:
     except Exception as e:
       QMessageBox.critical(self.parent, "Error", f"Failed to restore: {str(e)}")
 
+  def restore_many(self, paths: list[str]):
+    if not paths:
+      return
+    if len(paths) == 1:
+      self.restore(paths[0])
+      return
+
+    names = ", ".join(os.path.basename(p) for p in paths[:3])
+    if len(paths) > 3:
+      names += f" and {len(paths) - 3} more"
+
+    if not self._confirm(
+      "Confirm Restore",
+      f"Restore {len(paths)} items to their original locations?\n{names}"
+    ):
+      return
+
+    for path in paths:
+      self._restore_no_confirm(path)
+
   def delete_permanently(self, path: str):
     name = os.path.basename(path)
 
@@ -109,6 +186,26 @@ class TrashManager:
       )
     except Exception as e:
       QMessageBox.critical(self.parent, "Error", f"Failed to delete: {str(e)}")
+
+  def delete_many_permanently(self, paths: list[str]):
+    if not paths:
+      return
+    if len(paths) == 1:
+      self.delete_permanently(paths[0])
+      return
+
+    names = ", ".join(os.path.basename(p) for p in paths[:3])
+    if len(paths) > 3:
+      names += f" and {len(paths) - 3} more"
+
+    if not self._confirm(
+      "Confirm Permanent Deletion",
+      f"Permanently delete {len(paths)} items? This cannot be undone.\n{names}"
+    ):
+      return
+
+    for path in paths:
+      self._delete_no_confirm(path)
 
   def empty_trash(self):
     if not os.path.exists(self.trash_path) or not os.listdir(self.trash_path):
