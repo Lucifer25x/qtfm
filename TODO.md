@@ -1,8 +1,3 @@
-- Search:
-  - Scope (file system, current dir)
-  - Algorithm (dfs/bfs)
 - Context menu:
   - (Un)Compress using huffman
-- Undo/Redo
-- When search is empty and enter is pressed, exit search
-- Real search strategies
+- Maybe: Undo/Redo

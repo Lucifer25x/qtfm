@@ -161,20 +161,23 @@ class FileManager(QMainWindow):
   # ---------------------------------------------------------------------------
 
   def _on_selection_changed(self):
-    has_selection = len(self._current_selection()) > 0
+    selection_count = len(self._current_selection())
+    has_selection = selection_count > 0
+
     for action in [
-      self.actions.rename,
       self.actions.cut,
       self.actions.copy,
       self.actions.move_to_trash,
       self.actions.restore,
       self.actions.delete,
       self.actions.copy_path,
-      self.actions.properties,
       self.actions.open,
       self.actions.open_new_win,
     ]:
       action.setEnabled(has_selection)
+    
+    self.actions.rename.setEnabled(selection_count == 1)
+    self.actions.properties.setEnabled(selection_count == 1)
     self.actions.paste.setEnabled(self.file_ops.has_clipboard())
 
   # ---------------------------------------------------------------------------
@@ -284,15 +287,21 @@ class FileManager(QMainWindow):
 
   def _on_rename(self):
     paths = self._current_selection()
-    if paths:
+    if len(paths) == 1:
       self.file_ops.rename(paths[0])
 
   def _show_properties(self):
     paths = self._current_selection()
-    if not paths:
+    if not paths or len(paths) > 1:
       return
     dlg = PropertiesDialog(paths[0], self.model, self)
     dlg.exec()
+
+  def _copy_path_to_clipboard(self):
+    paths = self._current_selection()
+    if not paths:
+      return
+    QApplication.clipboard().setText("\n".join(paths))
 
   # ---------------------------------------------------------------------------
   # Zoom
@@ -422,6 +431,7 @@ class FileManager(QMainWindow):
       path = QDir.homePath()
     self.file_views.update_status(path)
     self.setWindowTitle(f"QtFM — {os.path.basename(path)}")
+    self.toolbar.path_stack.setCurrentIndex(0)
 
   # ---------------------------------------------------------------------------
   # Paste
@@ -479,9 +489,7 @@ class FileManager(QMainWindow):
     a.create_folder.triggered.connect(
       lambda: self.file_ops.create_folder(self._current_path())
     )
-    a.copy_path.triggered.connect(
-      lambda: QApplication.clipboard().setText(self._current_path())
-    )
+    a.copy_path.triggered.connect(self._copy_path_to_clipboard)
     a.copy.triggered.connect(lambda: (
       self.file_ops.copy(self._current_selection()),
       self.actions.paste.setEnabled(True)
