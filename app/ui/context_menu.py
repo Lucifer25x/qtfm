@@ -70,6 +70,11 @@ class ContextMenuBuilder:
         menu.addAction(actions.paste)
         menu.addSeparator()
         menu.addAction(actions.move_to_trash)
+        if not is_dir:
+          menu.addAction(actions.compress_huffman)
+          if target_path.endswith('.huff'):
+            menu.addAction(actions.decompress_huffman)
+        
 
       if not viewing_trash:
         menu.addAction(actions.paste)

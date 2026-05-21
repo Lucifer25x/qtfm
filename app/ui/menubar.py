@@ -19,6 +19,9 @@ class AppMenuBar(QMenuBar):
     file_menu.addAction(a.empty_trash)
     file_menu.addAction(a.delete)
     file_menu.addSeparator()
+    file_menu.addAction(a.compress_huffman)
+    file_menu.addAction(a.decompress_huffman)
+    file_menu.addSeparator()
     file_menu.addAction(a.properties)
 
     # Edit

@@ -1,3 +1,4 @@
-- Context menu:
-  - (Un)Compress using huffman
 - Maybe: Undo/Redo
+- Fix: check if file can be compressed/decompressed using huffman
+- Fix: restore from trash option in menubar
+- Fix: disable move to trash, compress, decompress in trash

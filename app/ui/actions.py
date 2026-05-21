@@ -67,9 +67,6 @@ class ActionRegistry:
     self.cut           = self._action("Cut",                None, "Ctrl+X")
     self.copy          = self._action("Copy",               None, "Ctrl+C")
     self.paste         = self._action("Paste",              None, "Ctrl+V")
-    self.cut.setEnabled(False)
-    self.copy.setEnabled(False)
-    self.paste.setEnabled(False)
     self.rename        = self._action("Rename",             None,                "F2")
     self.move_to_trash = self._action("Move to Trash",      QStyle.SP_TrashIcon, "Delete")
     self.restore       = self._action("Restore from Trash")
@@ -79,6 +76,8 @@ class ActionRegistry:
     self.create_folder = self._action("Create New Folder",  QStyle.SP_DirIcon)
     self.copy_path     = self._action("Copy Path")
     self.properties    = self._action("Properties",         None, "Alt+Return")
+    self.compress_huffman = self._action("Compress with Huffman", None)
+    self.decompress_huffman = self._action("Decompress with Huffman", None)
 
     # --- Search ---
     self.search = self._action("Search", None, "Ctrl+F")

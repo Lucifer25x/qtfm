@@ -2,7 +2,6 @@ from PySide6.QtWidgets import QInputDialog, QMessageBox
 import os
 import shutil
 
-
 class FileOps:
   def __init__(self, parent_widget):
     self.parent    = parent_widget

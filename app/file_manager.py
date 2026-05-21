@@ -14,6 +14,7 @@ from .ui.actions import ActionRegistry
 from .ui.menubar import AppMenuBar
 from .ui.dialogs import PropertiesDialog
 from .algorithms.search_worker import SearchWorker
+from .algorithms.huffman import compress, decompress
 from pathlib import Path
 import os
 
@@ -178,6 +179,8 @@ class FileManager(QMainWindow):
     
     self.actions.rename.setEnabled(selection_count == 1)
     self.actions.properties.setEnabled(selection_count == 1)
+    self.actions.compress_huffman.setEnabled(selection_count == 1)
+    self.actions.decompress_huffman.setEnabled(selection_count == 1)
     self.actions.paste.setEnabled(self.file_ops.has_clipboard())
 
   # ---------------------------------------------------------------------------
@@ -302,6 +305,24 @@ class FileManager(QMainWindow):
     if not paths:
       return
     QApplication.clipboard().setText("\n".join(paths))
+
+  def _on_compress_huffman(self):
+    paths = self._current_selection()
+    if not paths or len(paths) > 1:
+      return
+    output_path = compress(paths[0])
+    if not output_path:
+      return
+    self.navigate_to(os.path.dirname(output_path))
+
+  def _on_decompress_huffman(self):
+    paths = self._current_selection()
+    if not paths or len(paths) > 1:
+      return
+    output_path = decompress(paths[0])
+    if not output_path:
+      return
+    self.navigate_to(os.path.dirname(output_path))
 
   # ---------------------------------------------------------------------------
   # Zoom
@@ -503,6 +524,8 @@ class FileManager(QMainWindow):
     a.open_terminal.triggered.connect(
       lambda: self.context_menu._open_terminal(self._current_path())
     )
+    a.compress_huffman.triggered.connect(self._on_compress_huffman)
+    a.decompress_huffman.triggered.connect(self._on_decompress_huffman)
 
     # Search
     a.search.triggered.connect(self.toolbar._enter_search_mode)
