@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QFileSystemModel
 from PySide6.QtCore import QDir
-from app.core.icon_provider import FileIconProvider
+from app.utils.icon_provider import FileIconProvider
 
 class FileModel(QFileSystemModel):
   def __init__(self, parent=None):
