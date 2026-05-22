@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-  QHBoxLayout, QVBoxLayout, QMainWindow, QSplitter,
+  QHBoxLayout, QMessageBox, QVBoxLayout, QMainWindow, QSplitter,
   QSizePolicy, QWidget, QApplication
 )
 from PySide6.QtCore import QDir, Qt, QSize, QTimer
@@ -164,23 +164,26 @@ class FileManager(QMainWindow):
   def _on_selection_changed(self):
     selection_count = len(self._current_selection())
     has_selection = selection_count > 0
+    viewing_trash = self.context_menu.is_viewing_trash(self._current_path())
 
     for action in [
       self.actions.cut,
       self.actions.copy,
       self.actions.move_to_trash,
-      self.actions.restore,
       self.actions.delete,
       self.actions.copy_path,
       self.actions.open,
       self.actions.open_new_win,
     ]:
       action.setEnabled(has_selection)
+
+    self.actions.restore.setEnabled(has_selection and viewing_trash)
+    self.actions.move_to_trash.setEnabled(not viewing_trash)
     
     self.actions.rename.setEnabled(selection_count == 1)
     self.actions.properties.setEnabled(selection_count == 1)
-    self.actions.compress_huffman.setEnabled(selection_count == 1)
-    self.actions.decompress_huffman.setEnabled(selection_count == 1)
+    self.actions.compress_huffman.setEnabled(selection_count == 1 and not self._current_selection()[0].endswith('.huff'))
+    self.actions.decompress_huffman.setEnabled(selection_count == 1 and self._current_selection()[0].endswith('.huff'))
     self.actions.paste.setEnabled(self.file_ops.has_clipboard())
 
   # ---------------------------------------------------------------------------
@@ -310,7 +313,11 @@ class FileManager(QMainWindow):
     paths = self._current_selection()
     if not paths or len(paths) > 1:
       return
-    output_path = compress(paths[0])
+    try:
+      output_path = compress(paths[0])
+    except ValueError as e:
+      QMessageBox.critical(self, "Error", str(e))
+      return
     if not output_path:
       return
     self.navigate_to(os.path.dirname(output_path))
@@ -319,7 +326,12 @@ class FileManager(QMainWindow):
     paths = self._current_selection()
     if not paths or len(paths) > 1:
       return
-    output_path = decompress(paths[0])
+    try:
+      output_path = decompress(paths[0])
+    except ValueError as e:
+      QMessageBox.critical(self, "Error", str(e))
+      return
+    print(f"Decompressed to: {output_path}")
     if not output_path:
       return
     self.navigate_to(os.path.dirname(output_path))

@@ -42,7 +42,7 @@ def compress(file_path):
     text = f.read()
 
   if not text:
-    return None
+    raise ValueError("Cannot compress the file.")
 
   root = build_tree(text)
   codes = {}
@@ -64,6 +64,10 @@ def compress(file_path):
   return output_path
 
 def decompress(file_path):
+  if not file_path.endswith('.huff'):
+    raise ValueError("The file does not have a .huff extension.")
+  if os.path.getsize(file_path) == 0:
+    raise ValueError("The file is empty and cannot be decompressed.")
   with open(file_path, 'rb') as f:
     codes = pickle.load(f)
     target_bits_length = pickle.load(f)

@@ -21,6 +21,11 @@ class ContextMenuBuilder:
           args = ['--working-directory', path]
         subprocess.Popen([term] + args)
         return
+      
+  def is_viewing_trash(self, target_path: str) -> bool:
+    resolved_target = Path(target_path).resolve()
+    resolved_trash  = Path(self.trash_path).resolve()
+    return resolved_target.is_relative_to(resolved_trash) or resolved_target == resolved_trash
 
   def build(self, view, pos, actions):
     index       = view.indexAt(pos)
@@ -30,12 +35,7 @@ class ContextMenuBuilder:
       else self.model.filePath(view.rootIndex())
     )
     is_dir = self.model.isDir(index)
-
-    resolved_target = Path(target_path).resolve()
-    resolved_trash  = Path(self.trash_path).resolve()
-    in_trash        = resolved_target.is_relative_to(resolved_trash)
-    viewing_trash   = in_trash or resolved_target == resolved_trash
-
+    viewing_trash = self.is_viewing_trash(target_path)
     menu = QMenu()
 
     if viewing_trash:
@@ -70,10 +70,13 @@ class ContextMenuBuilder:
         menu.addAction(actions.paste)
         menu.addSeparator()
         menu.addAction(actions.move_to_trash)
+        menu.addAction(actions.delete)
+        menu.addSeparator()
         if not is_dir:
-          menu.addAction(actions.compress_huffman)
           if target_path.endswith('.huff'):
             menu.addAction(actions.decompress_huffman)
+          else:
+            menu.addAction(actions.compress_huffman)
         
 
       if not viewing_trash:
