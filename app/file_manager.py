@@ -171,7 +171,6 @@ class FileManager(QMainWindow):
       self.actions.copy,
       self.actions.move_to_trash,
       self.actions.delete,
-      self.actions.copy_path,
       self.actions.open,
       self.actions.open_new_win,
     ]:
@@ -180,8 +179,9 @@ class FileManager(QMainWindow):
     self.actions.restore.setEnabled(has_selection and viewing_trash)
     self.actions.move_to_trash.setEnabled(not viewing_trash)
     
+    self.actions.copy_path.setEnabled(selection_count < 2)
+    self.actions.properties.setEnabled(selection_count < 2)
     self.actions.rename.setEnabled(selection_count == 1)
-    self.actions.properties.setEnabled(selection_count == 1)
     self.actions.compress_huffman.setEnabled(selection_count == 1 and not self._current_selection()[0].endswith('.huff'))
     self.actions.decompress_huffman.setEnabled(selection_count == 1 and self._current_selection()[0].endswith('.huff'))
     self.actions.paste.setEnabled(self.file_ops.has_clipboard())
@@ -297,14 +297,14 @@ class FileManager(QMainWindow):
       self.file_ops.rename(paths[0])
 
   def _show_properties(self):
-    paths = self._current_selection()
+    paths = self._current_selection() or [self._current_path()]
     if not paths or len(paths) > 1:
       return
     dlg = PropertiesDialog(paths[0], self.model, self)
     dlg.exec()
 
   def _copy_path_to_clipboard(self):
-    paths = self._current_selection()
+    paths = self._current_selection() or [self._current_path()]
     if not paths:
       return
     QApplication.clipboard().setText("\n".join(paths))
