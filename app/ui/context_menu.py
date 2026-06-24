@@ -48,13 +48,16 @@ class ContextMenuBuilder:
         menu.addSeparator()
 
     else:
+      if index.isValid():
+        menu.addAction(actions.open)
+        menu.addSeparator()
+
       if is_dir:
         menu.addAction(actions.create_file)
         menu.addAction(actions.create_folder)
         menu.addSeparator()
 
         if index.isValid():
-          menu.addAction(actions.open)
           menu.addAction(actions.open_new_win)
 
         term_action = QAction(actions.open_terminal.icon(), "Open Terminal Here", menu)
@@ -77,7 +80,6 @@ class ContextMenuBuilder:
             menu.addAction(actions.decompress_huffman)
           else:
             menu.addAction(actions.compress_huffman)
-        
 
       if not viewing_trash:
         menu.addAction(actions.paste)

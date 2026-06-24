@@ -2,7 +2,8 @@ from PySide6.QtWidgets import (
   QHBoxLayout, QMessageBox, QVBoxLayout, QMainWindow, QSplitter,
   QSizePolicy, QWidget, QApplication
 )
-from PySide6.QtCore import QDir, Qt, QSize, QTimer
+from PySide6.QtCore import QDir, QUrl, Qt, QSize, QTimer
+from PySide6.QtGui import QDesktopServices
 from .core.model import FileModel
 from .core.trash import TrashManager
 from .utils.file_ops import FileOps
@@ -190,6 +191,21 @@ class FileManager(QMainWindow):
   # Navigation
   # ---------------------------------------------------------------------------
 
+  def open(self, path):
+    if os.path.isdir(path):
+      self.navigate_to(path)
+    else:
+      try:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+      except Exception as e:
+        QMessageBox.critical(self, "Error", f"Failed to open file:\n{e}")
+
+  def open_in_new_window(self, path):
+    new_window = FileManager()
+    new_window.navigate_to(path, add_to_history=False)
+    new_window.show()
+    self._windows.append(new_window)
+
   def navigate_to(self, path, add_to_history=True, clear_forward_stack=True):
     # Exit search mode silently if active
     if self.file_views.is_searching():
@@ -244,8 +260,11 @@ class FileManager(QMainWindow):
     self.navigate_to(item.data(Qt.UserRole))
 
   def on_item_double_clicked(self, index):
+    path = self.model.filePath(index)
     if self.model.isDir(index):
-      self.navigate_to(self.model.filePath(index))
+      self.navigate_to(path)
+    else:
+      self.open(path)
 
   # ---------------------------------------------------------------------------
   # View
@@ -447,13 +466,16 @@ class FileManager(QMainWindow):
       self.setWindowTitle(f"QtFM — Search: '{query}' ({count} results)")
 
   def _on_search_result_activated(self, path: str):
-    target = os.path.dirname(path) if not os.path.isdir(path) else path
     self._stop_search()
     self.toolbar.search_btn.setChecked(False)
     self.toolbar.search_edit.clear()
     self.toolbar.path_stack.setCurrentIndex(0)
     self.file_views.hide_search()
-    self.navigate_to(target)
+    if os.path.isdir(path):
+      self.navigate_to(path)
+    else:
+      # open file directly
+      self.open(path)
 
   def _on_search_exited(self):
     """Called when user presses Escape or clicks search button again."""
@@ -482,6 +504,8 @@ class FileManager(QMainWindow):
     a = self.actions
 
     # Navigation
+    a.open.triggered.connect(lambda: self._on_selection(lambda p: self.open(p)))
+    a.open_new_win.triggered.connect(lambda: self._on_selection(self.open_in_new_window))
     a.go_home.triggered.connect(lambda: self.navigate_to(QDir.homePath()))
     a.go_up.triggered.connect(self.navigate_up)
     a.go_back.triggered.connect(self.navigate_back)

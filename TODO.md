@@ -1,1 +1,2 @@
 - Maybe: Undo/Redo
+- Restore all
